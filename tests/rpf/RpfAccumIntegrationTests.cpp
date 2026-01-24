@@ -78,6 +78,11 @@ TEST(RpfAccumIntegrationTests, ReadsAnnotationAndGeoGrid) {
     EXPECT_GT(annotation.latLongOutput.geolocationGridNumLines, 0u);
     EXPECT_EQ(grid.lineNumber.size(),
               static_cast<std::size_t>(annotation.latLongOutput.geolocationGridNumLines));
+    EXPECT_GT(annotation.imageRect.numLines, 0u);
+    EXPECT_GT(annotation.imageRect.numPixels, 0u);
+    EXPECT_FALSE(annotation.fileName.empty());
+    EXPECT_NE(annotation.notes.summary.find("fileType="), std::string::npos);
+    EXPECT_NE(annotation.notes.summary.find("radarMode="), std::string::npos);
 }
 
 TEST(RpfAccumIntegrationTests, StreamsLineData) {

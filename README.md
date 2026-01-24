@@ -11,3 +11,7 @@ See `md/architecture.md` and `md/milestones.md` for the implementation plan and 
 - Contributing: `md/CONTRIBUTING.md`
 - Datasets: `md/DATASETS.md`
 - Release notes: `md/RELEASE_NOTES.md`
+
+## Coverage
+- Linux: `scripts/coverage_linux.sh`
+- Windows: `scripts/coverage_windows.ps1`
