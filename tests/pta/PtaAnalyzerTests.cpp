@@ -38,3 +38,28 @@ TEST(PtaAnalyzerTests, Analyze2DHandlesEmptyInput) {
     EXPECT_DOUBLE_EQ(stats.first.maxPower, 0.0);
     EXPECT_DOUBLE_EQ(stats.second.maxPower, 0.0);
 }
+
+TEST(PtaAnalyzerTests, Stats1DFrom2DMatchesAnalyze2D) {
+    pta::PtaChip chip;
+    chip.chipIn.resize(2, 3);
+    chip.chipIn << 1.0f, 1.0f, 1.0f,
+                   0.0f, 2.0f, 0.0f;
+
+    pta::PtaAnalyzer analyzer;
+    const auto statsA = analyzer.analyze2D(chip);
+    const auto statsB = analyzer.stats1DFrom2D(chip);
+    EXPECT_DOUBLE_EQ(statsA.first.maxPower, statsB.first.maxPower);
+    EXPECT_DOUBLE_EQ(statsA.second.maxPower, statsB.second.maxPower);
+}
+
+TEST(PtaAnalyzerTests, FindPeaksReturnsTopPeaks) {
+    pta::PtaChip chip;
+    chip.chipIn.resize(1, 7);
+    chip.chipIn << 0.0f, 1.0f, 0.0f, 2.0f, 0.0f, 1.5f, 0.0f;
+
+    pta::PtaAnalyzer analyzer;
+    const auto peaks = analyzer.findPeaks1D(chip, 2, 1);
+    ASSERT_EQ(peaks.size(), 2u);
+    EXPECT_EQ(peaks[0].index, 4u);
+    EXPECT_DOUBLE_EQ(peaks[0].power, 2.0);
+}

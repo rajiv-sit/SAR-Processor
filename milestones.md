@@ -80,3 +80,39 @@ Deliver a complete, testable C++23 SAR pipeline that mirrors the MATLAB flow fro
 ## Progress Tracking
 - Each milestone should have a checklist in the issue tracker.
 - Use semantic versioning: `v0.x` during development, `v1.0` at first validated release.
+
+## HLD Coverage Checklist
+**SarTape / IQ Ingest**
+- [x] Parse SarTape2 records with sync validation and error policy.
+- [x] Emit `.dat`, `.vts`, `.hdr`, `.ssp` outputs from ingest.
+- [ ] Support complex IQ output option equivalent to `XDM_ReadRecord` cmplx flag.
+- [ ] Match MATLAB `fillSceneParams` outputs (format and values) for reference dataset.
+
+**RPF Product Handling**
+- [x] Parse `.rpf/.wnf` chunk headers with pixel type conversions.
+- [x] Populate `annotStruct` subset (radarMode, grid count, image header).
+- [x] Populate `latLongGrid` arrays for geo-grid entries.
+- [ ] Complete `annotStruct` fields (imageRect, acquisition metadata, annotations).
+- [x] Add line-level streaming APIs (`RPF_ProductStream*` parity).
+- [x] Implement automation hooks: auto-PTA, annotation report, stripmap reprocess list.
+
+**Back-Projection**
+- [x] Load operator/secondary configs from JSON.
+- [x] Implement range/azimuth filter bank and back-projection stub.
+- [ ] Implement registration/autofocus workflows and persistence.
+- [x] Emit TIFF stub output (non-parity).
+
+**PTA/QA / TTL**
+- [x] Basic PTA stats (IRW/MSLR/ISLR, peak position/power).
+- [x] Basic multi-peak detection and histogram generation.
+- [x] TTL `.prs` parsing for report outputs (stub parity).
+- [ ] Full PTA/TTL behavior (zoomed stats, MATLAB parity).
+
+**RTO Visualizer**
+- [x] Ring buffer and data bus scaffolding.
+- [ ] Real IPC transport and real-time display with latency stats.
+
+**Testing / Validation**
+- [x] Unit tests for parsers, config loader, PTA, and RTO buffer.
+- [ ] Integration tests with reference datasets (SarTape, RPF blocks).
+- [ ] Coverage reporting (OpenCppCoverage/llvm-cov) with edge cases.

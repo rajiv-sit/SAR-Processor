@@ -1,5 +1,10 @@
 #include "backproj/BackProjectionEngine.hpp"
 
+#include <string>
+
+#include "backproj/FilterBank.hpp"
+#include "backproj/ImageWriter.hpp"
+
 namespace backproj {
 
 BackProjectionEngine::BackProjectionEngine(BackProjOperatorConfig operatorConfig,
@@ -7,6 +12,31 @@ BackProjectionEngine::BackProjectionEngine(BackProjOperatorConfig operatorConfig
     : operatorConfig_(std::move(operatorConfig)),
       secondaryConfig_(std::move(secondaryConfig)) {}
 
-void BackProjectionEngine::run() {}
+void BackProjectionEngine::run() {
+    if (operatorConfig_.nPixX == 0 || operatorConfig_.nPixY == 0) {
+        return;
+    }
+
+    Eigen::MatrixXf image(static_cast<int>(operatorConfig_.nPixY),
+                          static_cast<int>(operatorConfig_.nPixX));
+    for (int row = 0; row < image.rows(); ++row) {
+        for (int col = 0; col < image.cols(); ++col) {
+            image(row, col) = static_cast<float>(row + col);
+        }
+    }
+
+    FilterBank filters(secondaryConfig_.rngFilterParams,
+                       secondaryConfig_.azmFilterParams);
+    const auto rangeWindow = filters.rangeWindow(operatorConfig_.nPixX);
+    const auto azWindow = filters.azimuthWindow(operatorConfig_.nPixY);
+    FilterBank::applyWindow(image, rangeWindow, true);
+    FilterBank::applyWindow(image, azWindow, false);
+
+    std::string outputPath = "backproj_stub.tif";
+    if (!operatorConfig_.rpfBaseFileName.empty()) {
+        outputPath = operatorConfig_.rpfBaseFileName + "_stub.tif";
+    }
+    writeTiffStub(outputPath, image);
+}
 
 }  // namespace backproj

@@ -25,6 +25,9 @@ struct RpfConstants {
     static constexpr std::uint32_t kProcIdParamSize = 256;
     static constexpr std::uint32_t kGeoGridLineSize = 64;
     static constexpr std::uint32_t kDataProcOutputTailSize = 96;
+    static constexpr std::uint8_t kSeaspotMode = 0;
+    static constexpr std::uint8_t kLandspotMode = 1;
+    static constexpr std::uint8_t kStripmapMode = 2;
 };
 
 }  // namespace rpf
