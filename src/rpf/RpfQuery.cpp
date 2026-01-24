@@ -97,7 +97,10 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
             continue;
         }
 
-        const std::uint32_t bofImgOffset = chunkHeaderStart + RpfConstants::kImageChunkHeaderSize;
+        const std::uint32_t imageHeaderStart =
+            chunkHeaderStart + RpfConstants::kChunkCommonHeaderSize;
+        const std::uint32_t bofImgOffset =
+            imageHeaderStart + RpfConstants::kImageChunkHeaderSize;
         std::int32_t frameSeqNum = 0;
         std::int32_t dataWidth = 0;
         std::int32_t dataHeight = 0;
@@ -120,11 +123,12 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
             return false;
         }
 
-        const auto imageHeaderEnd = chunkHeaderStart + RpfConstants::kImageChunkHeaderSize;
+        const auto imageHeaderEnd = imageHeaderStart + RpfConstants::kImageChunkHeaderSize;
         if (static_cast<std::uint32_t>(input.tellg()) < imageHeaderEnd) {
             input.seekg(static_cast<std::streamoff>(imageHeaderEnd), std::ios::beg);
         }
 
+        input.seekg(static_cast<std::streamoff>(header.bofOffsetToNextChunk), std::ios::beg);
         const auto annotationStart = static_cast<std::uint32_t>(input.tellg());
         ChunkHeader annotationHeader{};
         if (!readChunkHeader(input, annotationHeader)) {
@@ -135,7 +139,9 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
             return false;
         }
 
-        input.seekg(static_cast<std::streamoff>(annotationStart + RpfConstants::kAnnotationHeaderSize), std::ios::beg);
+        const std::uint32_t annotationPayloadStart =
+            annotationStart + RpfConstants::kChunkCommonHeaderSize;
+        input.seekg(static_cast<std::streamoff>(annotationPayloadStart + RpfConstants::kAnnotationHeaderSize), std::ios::beg);
         std::int32_t fileType = 0;
         std::int32_t radarMode = 0;
         if (!readI32Be(input, fileType) || !readI32Be(input, radarMode)) {
@@ -148,7 +154,7 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
         int startNum = 0;
         if (radarMode == RpfConstants::kStripmapMode) {
             const std::uint32_t geoGridOffset =
-                annotationStart + RpfConstants::kAnnotationHeaderSize +
+                annotationPayloadStart + RpfConstants::kAnnotationHeaderSize +
                 RpfConstants::kProcImgFileIdSize +
                 RpfConstants::kImgDisplayParamSize +
                 RpfConstants::kDataAcqInfoSize +

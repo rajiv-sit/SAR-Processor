@@ -7,6 +7,8 @@
 #include "rpf/RpfChunkReader.hpp"
 #include "rpf/RpfProductStreamLine.hpp"
 #include "rpf/RpfQuery.hpp"
+#include "sar/SarTapeToRpf.hpp"
+#include "sartape2/SarTapeRecordWriter.hpp"
 
 namespace {
 
@@ -35,6 +37,38 @@ std::vector<std::filesystem::path> candidateRpfPaths(const std::filesystem::path
 }
 
 std::filesystem::path findReadableRpf(std::string& error) {
+    const auto tempRoot = std::filesystem::temp_directory_path();
+    const auto sarPath = tempRoot / "synthetic_sartape.dat";
+    const auto rpfPath = tempRoot / "synthetic_sartape.rpf";
+
+    sartape2::SarTapeRecordWriter writer;
+    if (!writer.open(sarPath.string())) {
+        error = "Failed to open synthetic SarTape output.";
+        return {};
+    }
+
+    for (int record = 0; record < 4; ++record) {
+        std::vector<std::int16_t> iq(256 * 2);
+        for (std::size_t i = 0; i < iq.size(); ++i) {
+            iq[i] = static_cast<std::int16_t>((record + 1) * 10 + static_cast<int>(i % 128));
+        }
+        writer.writeDataRecord(1, static_cast<std::uint16_t>(record + 1),
+                               200 + static_cast<std::uint32_t>(record),
+                               iq);
+    }
+    writer.close();
+
+    std::string convertError;
+    if (!sar::writeRpfFromSarTape(sarPath.string(), rpfPath.string(), 4, convertError)) {
+        error = "Failed to generate synthetic RPF: " + convertError;
+        return {};
+    }
+
+    rpf::RpfQueryResult query{};
+    if (rpf::queryRpfFile(rpfPath.string(), query)) {
+        return rpfPath;
+    }
+
     const auto root = findDataRoot();
     if (root.empty()) {
         error = "RPF data root not found.";
@@ -45,8 +79,8 @@ std::filesystem::path findReadableRpf(std::string& error) {
         if (!std::filesystem::exists(path)) {
             continue;
         }
-        rpf::RpfQueryResult query{};
-        if (rpf::queryRpfFile(path.string(), query)) {
+        rpf::RpfQueryResult fallback{};
+        if (rpf::queryRpfFile(path.string(), fallback)) {
             return path;
         }
     }

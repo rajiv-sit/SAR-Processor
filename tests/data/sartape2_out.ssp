@@ -1,0 +1,14 @@
+{
+  "carrierFreq": 0.0,
+  "dataType": "s",
+  "etaSc": 0.0,
+  "lambda": 0.0,
+  "linFMRate": 0.0,
+  "numLines": 1,
+  "numRngSamp": 1024,
+  "prf": 0.0,
+  "pulseLen": 0.0,
+  "rangeSc": 0.0,
+  "sampRate": 0.0,
+  "velocity": 0.0
+}

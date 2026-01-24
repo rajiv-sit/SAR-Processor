@@ -87,7 +87,34 @@ bool RpfImageDataParser::parseImageData(std::ifstream& input,
                                         bool skipImageData,
                                         Eigen::MatrixXf& outImage) {
     if (skipImageData) {
-        return true;
+        const std::uint32_t width = header.dataWidth;
+        const std::uint32_t height = header.dataHeight;
+        if (width == 0 || height == 0) {
+            return false;
+        }
+        std::size_t bytesPerPixel = 4;
+        switch (header.pixelType) {
+            case 0:
+            case 1:
+                bytesPerPixel = 1;
+                break;
+            case 4:
+                bytesPerPixel = 2;
+                break;
+            case 5:
+                bytesPerPixel = 8;
+                break;
+            case 6:
+                bytesPerPixel = 4;
+                break;
+            default:
+                bytesPerPixel = 4;
+                break;
+        }
+        const std::size_t bytesToSkip =
+            static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * bytesPerPixel;
+        input.seekg(static_cast<std::streamoff>(bytesToSkip), std::ios::cur);
+        return static_cast<bool>(input);
     }
 
     const std::uint32_t width = header.dataWidth;

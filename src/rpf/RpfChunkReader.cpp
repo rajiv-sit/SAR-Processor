@@ -114,6 +114,7 @@ bool RpfChunkReader::readBlock(std::uint32_t blockIndex,
             return false;
         }
 
+        input_.seekg(static_cast<std::streamoff>(header.bofOffsetToNextChunk), std::ios::beg);
         if (!readAnnotationChunk(annotation, nextOffset)) {
             return false;
         }
@@ -191,7 +192,9 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
         header.chunkType != RpfConstants::kAnnotationDataChunkTag) {
         return false;
     }
-    input_.seekg(static_cast<std::streamoff>(annotationStart + RpfConstants::kAnnotationHeaderSize),
+    const auto annotationPayloadStart =
+        annotationStart + RpfConstants::kChunkCommonHeaderSize;
+    input_.seekg(static_cast<std::streamoff>(annotationPayloadStart + RpfConstants::kAnnotationHeaderSize),
                  std::ios::beg);
 
     std::int32_t fileType = 0;
@@ -204,7 +207,7 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
     annotation.notes.summary =
         "fileType=" + std::to_string(fileType) + " radarMode=" + std::to_string(radarMode);
 
-    input_.seekg(static_cast<std::streamoff>(annotationStart + RpfConstants::kAnnotationHeaderSize +
+    input_.seekg(static_cast<std::streamoff>(annotationPayloadStart + RpfConstants::kAnnotationHeaderSize +
                                              RpfConstants::kProcImgFileIdSize +
                                              RpfConstants::kImgDisplayParamSize +
                                              RpfConstants::kDataAcqInfoSize +
@@ -235,7 +238,7 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
     annotation.latLongOutput.geolocationGridNumLines =
         static_cast<std::uint16_t>(gridLines);
 
-    nextOffset = annotationStart +
+    nextOffset = annotationPayloadStart +
                  RpfConstants::kAnnotationHeaderSize +
                  RpfConstants::kProcImgFileIdSize +
                  RpfConstants::kImgDisplayParamSize +
