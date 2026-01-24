@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Conan
+        run: python -m pip install --upgrade pip conan
+      - name: Configure
+        run: |
+          cd SAR-Processor
+          conan profile detect --force
+          conan install . --build=missing -s build_type=Release -s compiler.cppstd=23 --output-folder=build
+          cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+      - name: Build
+        run: cmake --build SAR-Processor/build --config Release
+      - name: Test
+        run: ctest --test-dir SAR-Processor/build -C Release --output-on-failure
