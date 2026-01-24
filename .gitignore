@@ -1,0 +1,25 @@
+# Build artifacts
+**/build/
+**/build-*/
+**/cmake-build-*/
+
+# Conan
+**/conan.lock
+**/conanbuildinfo.txt
+**/conanbuildinfo.cmake
+**/conan_toolchain.cmake
+**/conan*info*.json
+**/conan*build*.cmake
+**/conan_profiles/*
+
+# IDE / tooling
+.vscode/
+.idea/
+*.user
+*.suo
+*.vcxproj*
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db

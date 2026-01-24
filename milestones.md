@@ -1,0 +1,78 @@
+# Project Milestones (C++ SAR Pipeline)
+
+## Goal
+Deliver a complete, testable C++23 SAR pipeline that mirrors the MATLAB flow from SarTape IQ ingest to RPF parsing, back-projection, PTA/QA analysis, and real-time PyQt visualization.
+
+## Milestone 1: Project Bootstrap (Week 1)
+**Deliverables**
+- [x] CMake + Conan setup with Eigen, FFTW, `nlohmann/json`, `yaml-cpp`.
+- [x] Baseline repo layout per `architecture.md` (include/src/tests/configs/data).
+- [x] Tooling config: `.clang-format`, `.clang-tidy`, basic CI skeleton.
+**Exit Criteria**
+- [ ] Build succeeds on Windows + Linux (at least one CI run).
+- [ ] Sample unit test binary runs (empty test case).
+
+## Milestone 2: SarTape Reader Core (Week 2–3)
+**Deliverables**
+- [x] `SarTapeConstants`, `SarTapeReader`, `SarTapeIngestPipeline` skeletons.
+- [x] Output files: `.dat`, `.vts`, `.hdr`, `.ssp`.
+- [x] Error policy (fatal vs best-effort) with clear logging.
+**Exit Criteria**
+- [ ] Ingest a sample SarTape file and produce outputs (requires dataset).
+- [ ] Byte-for-byte `.dat` parity with MATLAB for a reference dataset (requires dataset).
+
+## Milestone 3: RPF Parser & Streaming (Week 3–4)
+**Deliverables**
+- [x] `RpfChunkReader`, `RpfImageDataParser`, `RpfProductStream`.
+- [x] PixelType conversions (float, complex, half).
+- [x] `AnnotationStruct` + `LatLongGrid` data models.
+**Exit Criteria**
+- [ ] Parse a known `.rpf/.wnf` block and match MATLAB `annotStruct` fields.
+- [ ] Stream block iteration without loading full file into RAM.
+
+## Milestone 4: Back-Projection Engine (Week 5–7)
+**Deliverables**
+- [x] `BackProjectionEngine` with range/azimuth filters (`FilterBank`) scaffolding.
+- [x] Config loading for `BackProjOperatorConfig` + `BackProjSecondaryConfig`.
+- [x] Registration + autofocus hooks (scaffold).
+**Exit Criteria**
+- [ ] Generate TIFF output matching MATLAB dimensions and scaling.
+- [ ] Filter output validated against MATLAB reference on at least one block.
+
+## Milestone 5: PTA/QA Analysis (Week 7–8)
+**Deliverables**
+- [ ] `PtaAnalyzer`, `PtaChip`, TTL-style runners.
+- [ ] Stats outputs (IRW, MSLR, ISLR, peak position/power).
+- [ ] Histogram/report outputs aligned with MATLAB.
+**Exit Criteria**
+- [ ] PTA stats match MATLAB on at least one reference chip.
+- [ ] TTL runner generates consistent report format.
+
+## Milestone 6: Real-Time PyQt Visualizer (Week 9–10)
+**Deliverables**
+- [ ] IPC pipeline (ZeroMQ or shared memory) streaming IQ + image frames.
+- [ ] `PyQtRtoViewer` with input/output panes, latency indicator.
+- [ ] Ring buffer for bounded memory.
+**Exit Criteria**
+- [ ] Live rendering with stable FPS and bounded memory.
+- [ ] Latency stats displayed and logged.
+
+## Milestone 7: Integration & Validation (Week 11–12)
+**Deliverables**
+- [ ] Full pipeline wiring: SarTape → RPF → BackProj → PTA → RTO.
+- [ ] Automated integration tests and baseline validation dataset.
+- [ ] Finalized documentation and reproducible build instructions.
+**Exit Criteria**
+- [ ] End-to-end run produces outputs matching MATLAB references.
+- [ ] CI passes on Windows/Linux with full test suite.
+
+## Milestone 8: Public Release Prep (Week 13)
+**Deliverables**
+- [ ] Licensing, README, and contribution guide.
+- [ ] Versioned release tag and sample dataset usage notes.
+**Exit Criteria**
+- [ ] Public-ready repository with onboarding documentation.
+
+## Progress Tracking
+- Each milestone should have a checklist in the issue tracker.
+- Use semantic versioning: `v0.x` during development, `v1.0` at first validated release.
