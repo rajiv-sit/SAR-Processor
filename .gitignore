@@ -19,6 +19,7 @@
 *.suo
 *.vcxproj*
 *.sln
+CMakeUserPresets.json
 
 # OS
 .DS_Store
@@ -26,3 +27,7 @@ Thumbs.db
 
 # Local docs
 MATLAB-to-Cplusplus.md
+
+#folder
+md/
+tools/
