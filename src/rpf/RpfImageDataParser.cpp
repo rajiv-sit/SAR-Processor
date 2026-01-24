@@ -74,6 +74,12 @@ float readHalfBe(std::ifstream& input) {
     return halfToFloat(raw);
 }
 
+float readU8(std::ifstream& input) {
+    std::uint8_t value = 0;
+    input.read(reinterpret_cast<char*>(&value), 1);
+    return static_cast<float>(value);
+}
+
 }  // namespace
 
 bool RpfImageDataParser::parseImageData(std::ifstream& input,
@@ -96,6 +102,11 @@ bool RpfImageDataParser::parseImageData(std::ifstream& input,
         for (std::uint32_t col = 0; col < width; ++col) {
             float value = 0.0f;
             switch (header.pixelType) {
+                case 0:
+                case 1: {
+                    value = readU8(input);
+                    break;
+                }
                 case 4: {  // half float
                     value = readHalfBe(input);
                     break;

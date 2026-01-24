@@ -133,18 +133,23 @@ bool RpfChunkReader::readChunkHeader(RpfChunkHeader& header) {
 }
 
 bool RpfChunkReader::readImageDataChunkHeader(ImageDataChunkHeader& header, std::uint32_t& nextOffset) {
+    const auto headerStart = static_cast<std::uint32_t>(input_.tellg());
     if (!readI32Be(input_, header.frameSeqNum)) {
         return false;
     }
-    if (!readI32Be(input_, reinterpret_cast<std::int32_t&>(header.dataWidth))) {
-        return false;
-    }
-    if (!readI32Be(input_, reinterpret_cast<std::int32_t&>(header.dataHeight))) {
-        return false;
-    }
-    if (!readI32Be(input_, header.pixelType)) {
-        return false;
-    }
+        std::int32_t dataWidth = 0;
+        std::int32_t dataHeight = 0;
+        if (!readI32Be(input_, dataWidth)) {
+            return false;
+        }
+        if (!readI32Be(input_, dataHeight)) {
+            return false;
+        }
+        header.dataWidth = static_cast<std::uint32_t>(dataWidth);
+        header.dataHeight = static_cast<std::uint32_t>(dataHeight);
+        if (!readI32Be(input_, header.pixelType)) {
+            return false;
+        }
     if (!readI32Be(input_, header.rspInhibit)) {
         return false;
     }
@@ -155,12 +160,24 @@ bool RpfChunkReader::readImageDataChunkHeader(ImageDataChunkHeader& header, std:
         return false;
     }
     const auto position = static_cast<std::uint32_t>(input_.tellg());
-    nextOffset = position + (RpfConstants::kImageChunkHeaderSize - RpfConstants::kChunkCommonHeaderSize);
+    const auto headerEnd = headerStart + RpfConstants::kImageChunkHeaderSize;
+    if (position < headerEnd) {
+        input_.seekg(static_cast<std::streamoff>(headerEnd), std::ios::beg);
+    }
+    nextOffset = headerEnd;
     return true;
 }
 
 bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint32_t& nextOffset) {
     const auto annotationStart = static_cast<std::uint32_t>(input_.tellg());
+    RpfChunkHeader header{};
+    if (!readChunkHeader(header)) {
+        return false;
+    }
+    if (header.syncCode != RpfConstants::kChunkSyncCode ||
+        header.chunkType != RpfConstants::kAnnotationDataChunkTag) {
+        return false;
+    }
     input_.seekg(static_cast<std::streamoff>(annotationStart + RpfConstants::kAnnotationHeaderSize),
                  std::ios::beg);
 

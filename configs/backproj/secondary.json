@@ -1,0 +1,39 @@
+{
+  "algorithmSelection": "quad",
+  "rngFilterParams": {
+    "windowCoef": 0.54,
+    "windowBroadening": 1.47,
+    "scalingMethod": "totalpower"
+  },
+  "azmFilterParams": {
+    "windowCoef": 0.54,
+    "windowBroadening": 1.47,
+    "scalingMethod": "totalpower"
+  },
+  "quadParams": {
+    "minSubImageSize": 32,
+    "azOverSampFact": 1.1,
+    "nExtraRngSamps": 16,
+    "nRngTaper": 12,
+    "nAzmTaper": 12,
+    "nPadAzFftEachEnd": 12
+  },
+  "frameRegistrationParams": {
+    "alphaAccum": 0.7,
+    "preShiftImageGrid": true,
+    "regisSearchSize": 228,
+    "marginBlanking": 12,
+    "chipSize": 32,
+    "magFactor": 16,
+    "accumPow": 0.25,
+    "detPow": 0.5
+  },
+  "rgCompMode": "narrowSwath",
+  "blockSizeInBytes": 41943040,
+  "nExtraRngSamps": 32,
+  "tileOverlap": 64,
+  "edgeTaperPixels": 8,
+  "applyIqCalCorrection": true,
+  "applyAgcCorrection": true,
+  "applyStcCorrection": true
+}

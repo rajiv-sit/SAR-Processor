@@ -10,7 +10,7 @@
 namespace rpf {
 
 struct RpfChunkHeader {
-    std::uint32_t syncCode = 0;
+    std::uint16_t syncCode = 0;
     std::uint16_t chunkType = 0;
     std::uint32_t chunkSize = 0;
     std::uint32_t bofOffsetToNextChunk = 0;
