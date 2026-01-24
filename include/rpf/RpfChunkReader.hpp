@@ -39,6 +39,7 @@ private:
     bool readGeoGridLines(const AnnotationStruct& annotation, LatLongGrid& grid);
 
     std::ifstream input_;
+    std::string path_;
 };
 
 }  // namespace rpf

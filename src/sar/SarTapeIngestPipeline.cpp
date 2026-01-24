@@ -1,6 +1,7 @@
 #include "sar/SarTapeIngestPipeline.hpp"
 
 #include <algorithm>
+#include <complex>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -17,7 +18,9 @@ namespace {
 
 constexpr double kSpeedOfLight = 299792458.0;
 
-SarSceneParams buildSceneParams(const SarSceneHeader& header, std::uint32_t numLines) {
+SarSceneParams buildSceneParams(const SarSceneHeader& header,
+                                std::uint32_t numLines,
+                                bool outputComplexIq) {
     SarSceneParams params{};
     params.carrierFreq = header.radarFreq * 1e6;
     params.lambda = (params.carrierFreq > 0.0) ? (kSpeedOfLight / params.carrierFreq) : 0.0;
@@ -30,7 +33,7 @@ SarSceneParams buildSceneParams(const SarSceneHeader& header, std::uint32_t numL
     params.prf = (header.pri > 0) ? (1.0 / (header.pri * 1e-6)) : 0.0;
     params.numLines = numLines;
     params.numRngSamp = static_cast<std::uint32_t>(SarTapeConstants::kRecordSize / 2);
-    params.dataType = "s";
+    params.dataType = outputComplexIq ? "c" : "s";
     return params;
 }
 
@@ -98,6 +101,16 @@ nlohmann::json toJson(const SarSceneParams& params) {
     };
 }
 
+void writeComplexIq(std::ofstream& datOut, const std::vector<std::int8_t>& iqBytes) {
+    const std::size_t maxIndex = iqBytes.size() - (iqBytes.size() % 2);
+    for (std::size_t i = 0; i < maxIndex; i += 2) {
+        const std::complex<float> sample(static_cast<float>(iqBytes[i]),
+                                         static_cast<float>(iqBytes[i + 1]));
+        datOut.write(reinterpret_cast<const char*>(&sample),
+                     static_cast<std::streamsize>(sizeof(sample)));
+    }
+}
+
 }  // namespace
 
 SarTapeIngestPipeline::SarTapeIngestPipeline(std::string inputPath,
@@ -158,8 +171,12 @@ std::uint32_t SarTapeIngestPipeline::run() {
             expectedLinesKnown = true;
         }
 
-        datOut.write(reinterpret_cast<const char*>(record.iqBytes.data()),
-                     static_cast<std::streamsize>(record.iqBytes.size()));
+        if (options_.outputComplexIq) {
+            writeComplexIq(datOut, record.iqBytes);
+        } else {
+            datOut.write(reinterpret_cast<const char*>(record.iqBytes.data()),
+                         static_cast<std::streamsize>(record.iqBytes.size()));
+        }
         vtsOut << record.header.timeStamp << '\n';
         ++linesWritten;
 
@@ -170,7 +187,9 @@ std::uint32_t SarTapeIngestPipeline::run() {
 
     if (reader.hasSceneHeader()) {
         const auto& sceneHeader = reader.sceneHeader();
-        const SarSceneParams sceneParams = buildSceneParams(sceneHeader, linesWritten);
+        const SarSceneParams sceneParams = buildSceneParams(sceneHeader,
+                                                            linesWritten,
+                                                            options_.outputComplexIq);
 
         hdrOut << toJson(sceneHeader).dump(2) << '\n';
         sspOut << toJson(sceneParams).dump(2) << '\n';

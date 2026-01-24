@@ -28,7 +28,11 @@ TEST(RtoFrameBufferTests, DropsOldestWhenCapacityExceeded) {
 }
 
 TEST(RtoDataBusTests, PublishReturnsTrue) {
-    rto::RtoDataBus bus("tcp://127.0.0.1:5555");
+    rto::RtoDataBus bus("udp://127.0.0.1:5000");
     rto::RtoFrame frame{};
+    frame.width = 2;
+    frame.height = 2;
+    frame.timestampNs = 100;
+    frame.pixels = {0.0f, 1.0f, 2.0f, 3.0f};
     EXPECT_TRUE(bus.publish(frame));
 }

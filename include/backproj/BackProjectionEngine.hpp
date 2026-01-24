@@ -3,7 +3,6 @@
 #include "backproj/AutofocusController.hpp"
 #include "backproj/BackProjOperatorConfig.hpp"
 #include "backproj/BackProjSecondaryConfig.hpp"
-#include "backproj/FilterBank.hpp"
 #include "backproj/RegistrationManager.hpp"
 
 namespace backproj {
@@ -18,7 +17,6 @@ public:
 private:
     BackProjOperatorConfig operatorConfig_;
     BackProjSecondaryConfig secondaryConfig_;
-    FilterBank filterBank_;
     RegistrationManager registrationManager_;
     AutofocusController autofocusController_;
 };

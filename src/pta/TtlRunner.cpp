@@ -40,7 +40,20 @@ bool TtlRunner::runFromConfig(const std::string& path) {
 
     std::string reportPath = "pta_report.txt";
     std::string format = "json";
-    if (path.size() >= 4 && path.substr(path.size() - 4) == ".prs") {
+    bool useKeyValue = (path.size() >= 4 && path.substr(path.size() - 4) == ".prs");
+    if (!useKeyValue) {
+        nlohmann::json config;
+        try {
+            input >> config;
+            reportPath = config.value("reportPath", reportPath);
+            format = config.value("reportFormat", format);
+        } catch (const nlohmann::json::parse_error&) {
+            useKeyValue = true;
+        }
+    }
+    if (useKeyValue) {
+        input.clear();
+        input.seekg(0);
         const auto kv = readKeyValueConfig(input);
         const auto reportIt = kv.find("reportPath");
         if (reportIt != kv.end()) {
@@ -50,11 +63,6 @@ bool TtlRunner::runFromConfig(const std::string& path) {
         if (formatIt != kv.end()) {
             format = formatIt->second;
         }
-    } else {
-        nlohmann::json config;
-        input >> config;
-        reportPath = config.value("reportPath", reportPath);
-        format = config.value("reportFormat", format);
     }
 
     std::ofstream report(reportPath);
@@ -62,9 +70,21 @@ bool TtlRunner::runFromConfig(const std::string& path) {
         return false;
     }
 
-    report << "PTA report stub\n";
-    report << "inputConfig=" << path << '\n';
-    report << "format=" << format << '\n';
+    const std::string normalizedFormat =
+        (format == "json" || format == "text") ? format : "text";
+
+    if (normalizedFormat == "json") {
+        nlohmann::json payload;
+        payload["reportFormat"] = normalizedFormat;
+        payload["inputConfig"] = path;
+        payload["status"] = "stub";
+        report << payload.dump(2) << '\n';
+    } else {
+        report << "PTA_REPORT\n";
+        report << "inputConfig=" << path << '\n';
+        report << "reportFormat=" << normalizedFormat << '\n';
+        report << "status=stub\n";
+    }
     return true;
 }
 

@@ -1,4 +1,5 @@
 #include <chrono>
+#include <complex>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -114,4 +115,29 @@ TEST(SarTapeIngestPipelineTests, BestEffortWritesValidRecords) {
     EXPECT_EQ(linesWritten, 2u);
     EXPECT_EQ(fileSizeOrZero(outputPrefix.string() + ".dat"),
               sar::SarTapeConstants::kRecordSize * 2u);
+}
+
+TEST(SarTapeIngestPipelineTests, ComplexOutputWritesFloatPairs) {
+    const auto inputPath = makeTempPath("sar_ingest_input_complex", ".dat");
+    std::ofstream output(inputPath, std::ios::binary);
+    ASSERT_TRUE(output);
+
+    appendRecord(output, buildRecord(sar::SarTapeConstants::kSyncWord,
+                                     sar::SarTapeConstants::kRecordTypeData,
+                                     1,
+                                     1,
+                                     10u));
+    output.close();
+
+    const auto outputPrefix = makeTempPath("sar_ingest_output_complex", "");
+    sar::IngestOptions options{};
+    options.errorPolicy = sar::ErrorPolicy::kBestEffort;
+    options.outputComplexIq = true;
+    sar::SarTapeIngestPipeline pipeline(inputPath.string(), outputPrefix.string(), options);
+    const std::uint32_t linesWritten = pipeline.run();
+
+    EXPECT_EQ(linesWritten, 1u);
+    const std::uintmax_t expectedSamples = sar::SarTapeConstants::kRecordSize / 2u;
+    const std::uintmax_t expectedBytes = expectedSamples * sizeof(std::complex<float>);
+    EXPECT_EQ(fileSizeOrZero(outputPrefix.string() + ".dat"), expectedBytes);
 }

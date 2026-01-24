@@ -1,6 +1,7 @@
 #include "pta/PtaHistogram.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace pta {
 
@@ -19,11 +20,20 @@ PtaHistogram generateHistogram(const std::vector<float>& values, std::size_t bin
     }
 
     const double range = hist.maxValue - hist.minValue;
+    const double binWidth = range / static_cast<double>(bins);
     for (float value : values) {
-        const double normalized = (static_cast<double>(value) - hist.minValue) / range;
-        std::size_t index = static_cast<std::size_t>(normalized * static_cast<double>(bins));
-        if (index >= bins) {
+        std::size_t index = 0;
+        const double val = static_cast<double>(value);
+        if (val <= hist.minValue) {
+            index = 0;
+        } else if (val >= hist.maxValue) {
             index = bins - 1;
+        } else if (binWidth > 0.0) {
+            const double normalized = (val - hist.minValue) / binWidth;
+            index = static_cast<std::size_t>(std::ceil(normalized)) - 1;
+            if (index >= bins) {
+                index = bins - 1;
+            }
         }
         ++hist.counts[index];
     }

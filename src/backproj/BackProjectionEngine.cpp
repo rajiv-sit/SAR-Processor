@@ -32,11 +32,29 @@ void BackProjectionEngine::run() {
     FilterBank::applyWindow(image, rangeWindow, true);
     FilterBank::applyWindow(image, azWindow, false);
 
+    registrationManager_.configure(secondaryConfig_.frameRegistrationParams);
+    if (operatorConfig_.applyFrameRegistration) {
+        registrationManager_.registerFrame(image, true);
+    }
+
+    if (operatorConfig_.applyAutoFocus) {
+        autofocusController_.analyzeFrame(image);
+    }
+
     std::string outputPath = "backproj_stub.tif";
     if (!operatorConfig_.rpfBaseFileName.empty()) {
         outputPath = operatorConfig_.rpfBaseFileName + "_stub.tif";
     }
-    writeTiffStub(outputPath, image);
+    writeTiff(outputPath, image);
+
+    const std::string basePath =
+        operatorConfig_.rpfBaseFileName.empty() ? "backproj" : operatorConfig_.rpfBaseFileName;
+    if (!registrationManager_.results().empty()) {
+        registrationManager_.saveJson(basePath + "_registration.json");
+    }
+    if (!autofocusController_.results().empty()) {
+        autofocusController_.saveJson(basePath + "_autofocus.json");
+    }
 }
 
 }  // namespace backproj

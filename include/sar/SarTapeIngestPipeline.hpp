@@ -12,6 +12,7 @@ enum class ErrorPolicy {
 
 struct IngestOptions {
     ErrorPolicy errorPolicy = ErrorPolicy::kFatal;
+    bool outputComplexIq = false;
 };
 
 class SarTapeIngestPipeline {

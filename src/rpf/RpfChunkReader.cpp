@@ -50,7 +50,8 @@ bool readI32Be(std::ifstream& input, std::int32_t& value) {
 }  // namespace
 
 RpfChunkReader::RpfChunkReader(const std::string& path)
-    : input_(path, std::ios::binary) {}
+    : input_(path, std::ios::binary),
+      path_(path) {}
 
 RpfChunkReader::~RpfChunkReader() = default;
 
@@ -94,6 +95,18 @@ bool RpfChunkReader::readBlock(std::uint32_t blockIndex,
         if (!readImageDataChunkHeader(annotation.imageDataChunkHeader, nextOffset)) {
             return false;
         }
+        annotation.imageRect.startLine = 1;
+        annotation.imageRect.startPixel = 1;
+        annotation.imageRect.numLines = annotation.imageDataChunkHeader.dataHeight;
+        annotation.imageRect.numPixels = annotation.imageDataChunkHeader.dataWidth;
+        annotation.acquisition.frameSeqNum = annotation.imageDataChunkHeader.frameSeqNum;
+        annotation.acquisition.pixelType = annotation.imageDataChunkHeader.pixelType;
+        annotation.acquisition.rspInhibit = annotation.imageDataChunkHeader.rspInhibit;
+        annotation.acquisition.pixelMarginStart = annotation.imageDataChunkHeader.pixelMarginStart;
+        annotation.acquisition.pixelMarginEnd = annotation.imageDataChunkHeader.pixelMarginEnd;
+        annotation.acquisition.lineMarginStart = annotation.imageDataChunkHeader.lineMarginStart;
+        annotation.acquisition.lineMarginEnd = annotation.imageDataChunkHeader.lineMarginEnd;
+        annotation.fileName = path_;
 
         Eigen::MatrixXf imageData;
         RpfImageDataParser parser;
@@ -187,6 +200,9 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
         return false;
     }
     annotation.fileIdParams.radarMode = static_cast<std::uint8_t>(radarMode);
+    annotation.fileIdParams.fileType = fileType;
+    annotation.notes.summary =
+        "fileType=" + std::to_string(fileType) + " radarMode=" + std::to_string(radarMode);
 
     input_.seekg(static_cast<std::streamoff>(annotationStart + RpfConstants::kAnnotationHeaderSize +
                                              RpfConstants::kProcImgFileIdSize +

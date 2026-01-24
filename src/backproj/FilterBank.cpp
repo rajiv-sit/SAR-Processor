@@ -1,6 +1,7 @@
 #include "backproj/FilterBank.hpp"
 
 #include <cmath>
+#include <numbers>
 
 namespace backproj {
 
@@ -15,7 +16,8 @@ Eigen::VectorXf hammingWindow(std::size_t size, double coef) {
     const double beta = 1.0 - alpha;
     const double denom = static_cast<double>(size - 1);
     for (std::size_t i = 0; i < size; ++i) {
-        const double phase = (denom > 0.0) ? (2.0 * M_PI * static_cast<double>(i) / denom) : 0.0;
+        const double phase =
+            (denom > 0.0) ? (2.0 * std::numbers::pi_v<double> * static_cast<double>(i) / denom) : 0.0;
         window(static_cast<int>(i)) = static_cast<float>(alpha - beta * std::cos(phase));
     }
     return window;

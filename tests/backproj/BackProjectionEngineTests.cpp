@@ -32,4 +32,6 @@ TEST(BackProjectionEngineTests, WritesStubOutputWhenConfigured) {
 
     const auto path = prefix.string() + "_stub.tif";
     EXPECT_TRUE(std::filesystem::exists(path));
+    EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_registration.json"));
+    EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_autofocus.json"));
 }

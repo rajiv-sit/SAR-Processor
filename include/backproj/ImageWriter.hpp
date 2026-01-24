@@ -6,6 +6,6 @@
 
 namespace backproj {
 
-bool writeTiffStub(const std::string& path, const Eigen::MatrixXf& image);
+bool writeTiff(const std::string& path, const Eigen::MatrixXf& image);
 
 }  // namespace backproj
