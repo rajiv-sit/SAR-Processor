@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <fstream>
 #include <vector>
 
@@ -157,16 +158,10 @@ bool queryRpfAcquisition(const std::string& fileName,
                          int frameOrLine,
                          RpfAcquisitionMatch& match,
                          std::string* error) {
-    const std::string baseName = getBaseFileName(fileName);
-    std::vector<std::string> files = findFiles(baseName);
-    if (files.empty()) {
-        files.push_back(fileName);
-    }
-
-    for (const auto& path : files) {
+    auto tryMatch = [&](const std::string& path) -> bool {
         RpfQueryResult query{};
         if (!queryRpfFile(path, query) || query.startNums.empty()) {
-            continue;
+            return false;
         }
 
         const bool isStripmap = (query.mode == RpfConstants::kStripmapMode);
@@ -185,6 +180,21 @@ bool queryRpfAcquisition(const std::string& fileName,
             match.numPixels = query.numPixels[i];
             match.pixelType = query.pixelTypes[i];
             match.bofImgOffset = query.bofImgOffsets[i];
+            return true;
+        }
+        return false;
+    };
+
+    if (std::filesystem::exists(fileName)) {
+        if (tryMatch(fileName)) {
+            return true;
+        }
+    }
+
+    const std::string baseName = getBaseFileName(fileName);
+    const std::vector<std::string> files = findFiles(baseName);
+    for (const auto& path : files) {
+        if (tryMatch(path)) {
             return true;
         }
     }

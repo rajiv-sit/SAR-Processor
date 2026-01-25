@@ -39,6 +39,18 @@ struct TtlConfig {
     bool useIqa = false;
 };
 
+std::string trim(const std::string& value) {
+    std::size_t start = 0;
+    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
+        ++start;
+    }
+    std::size_t end = value.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+        --end;
+    }
+    return value.substr(start, end - start);
+}
+
 std::unordered_map<std::string, std::string> readKeyValueConfig(std::ifstream& input) {
     std::unordered_map<std::string, std::string> config;
     std::string line;
@@ -64,18 +76,6 @@ std::unordered_map<std::string, std::string> readKeyValueConfig(std::ifstream& i
         }
     }
     return config;
-}
-
-std::string trim(const std::string& value) {
-    std::size_t start = 0;
-    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
-        ++start;
-    }
-    std::size_t end = value.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
-        --end;
-    }
-    return value.substr(start, end - start);
 }
 
 bool parseBool(const std::string& value, bool fallback) {

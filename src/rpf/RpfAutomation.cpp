@@ -122,13 +122,20 @@ bool RpfAutomation::writeAnnotationReport(const std::string& path,
         output << report.dump(2) << '\n';
     } else {
         writeTextLine(output, "fileName", annotation.fileName);
-        writeTextLine(output, "radarMode", annotation.fileIdParams.radarMode);
-        writeTextLine(output, "fileType", annotation.fileIdParams.fileType);
-        writeTextLine(output, "gridLines", annotation.latLongOutput.geolocationGridNumLines);
-        writeTextLine(output, "imageRect.startLine", annotation.imageRect.startLine);
-        writeTextLine(output, "imageRect.startPixel", annotation.imageRect.startPixel);
-        writeTextLine(output, "imageRect.numLines", annotation.imageRect.numLines);
-        writeTextLine(output, "imageRect.numPixels", annotation.imageRect.numPixels);
+        writeTextLine(output, "radarMode",
+                      static_cast<std::int64_t>(annotation.fileIdParams.radarMode));
+        writeTextLine(output, "fileType",
+                      static_cast<std::int64_t>(annotation.fileIdParams.fileType));
+        writeTextLine(output, "gridLines",
+                      static_cast<std::int64_t>(annotation.latLongOutput.geolocationGridNumLines));
+        writeTextLine(output, "imageRect.startLine",
+                      static_cast<std::int64_t>(annotation.imageRect.startLine));
+        writeTextLine(output, "imageRect.startPixel",
+                      static_cast<std::int64_t>(annotation.imageRect.startPixel));
+        writeTextLine(output, "imageRect.numLines",
+                      static_cast<std::int64_t>(annotation.imageRect.numLines));
+        writeTextLine(output, "imageRect.numPixels",
+                      static_cast<std::int64_t>(annotation.imageRect.numPixels));
         writeTextStats(output, "pta.x", xStats);
         writeTextStats(output, "pta.y", yStats);
     }
@@ -162,8 +169,10 @@ bool RpfAutomation::writeAutoPtaReport(const std::string& path,
         output << report.dump(2) << '\n';
     } else {
         writeTextLine(output, "fileName", annotation.fileName);
-        writeTextLine(output, "radarMode", annotation.fileIdParams.radarMode);
-        writeTextLine(output, "fileType", annotation.fileIdParams.fileType);
+        writeTextLine(output, "radarMode",
+                      static_cast<std::int64_t>(annotation.fileIdParams.radarMode));
+        writeTextLine(output, "fileType",
+                      static_cast<std::int64_t>(annotation.fileIdParams.fileType));
         writeTextLine(output, "entryCount", static_cast<std::int64_t>(entries.size()));
         for (const auto& entry : entries) {
             output << "line=" << entry.line << '\n';

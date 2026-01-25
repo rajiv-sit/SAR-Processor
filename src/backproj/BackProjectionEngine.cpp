@@ -195,10 +195,12 @@ Eigen::MatrixXf cropMagnitude(const Eigen::MatrixXcf& data, int targetRows, int 
     if (data.size() == 0 || targetRows <= 0 || targetCols <= 0) {
         return {};
     }
-    const int startRow = std::max(0, (data.rows() - targetRows) / 2);
-    const int startCol = std::max(0, (data.cols() - targetCols) / 2);
-    const int rows = std::min(targetRows, data.rows() - startRow);
-    const int cols = std::min(targetCols, data.cols() - startCol);
+    const int dataRows = static_cast<int>(data.rows());
+    const int dataCols = static_cast<int>(data.cols());
+    const int startRow = std::max(0, (dataRows - targetRows) / 2);
+    const int startCol = std::max(0, (dataCols - targetCols) / 2);
+    const int rows = std::min(targetRows, dataRows - startRow);
+    const int cols = std::min(targetCols, dataCols - startCol);
     return data.block(startRow, startCol, rows, cols).cwiseAbs();
 }
 

@@ -235,22 +235,6 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
 
     const auto dataAcqOffset = imgDisplayOffset + RpfConstants::kImgDisplayParamSize;
     input_.seekg(static_cast<std::streamoff>(dataAcqOffset), std::ios::beg);
-    std::int32_t startLine = 0;
-    std::int32_t startPixel = 0;
-    std::int32_t numLines = 0;
-    std::int32_t numPixels = 0;
-    if (!readI32Be(input_, startLine) || !readI32Be(input_, startPixel) ||
-        !readI32Be(input_, numLines) || !readI32Be(input_, numPixels)) {
-        return false;
-    }
-    if (startLine > 0 && startPixel > 0 && numLines > 0 && numPixels > 0 &&
-        static_cast<std::uint32_t>(numLines) <= annotation.imageDataChunkHeader.dataHeight &&
-        static_cast<std::uint32_t>(numPixels) <= annotation.imageDataChunkHeader.dataWidth) {
-        annotation.imageRect.startLine = static_cast<std::uint32_t>(startLine);
-        annotation.imageRect.startPixel = static_cast<std::uint32_t>(startPixel);
-        annotation.imageRect.numLines = static_cast<std::uint32_t>(numLines);
-        annotation.imageRect.numPixels = static_cast<std::uint32_t>(numPixels);
-    }
 
     annotation.dataAcquisition.aircraftId = readFixedString(input_, 6);
     if (!input_) return false;
@@ -274,6 +258,34 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
     if (!input_) return false;
     std::vector<std::uint8_t> dataAcqSpare(88);
     if (!readBytes(input_, dataAcqSpare.data(), dataAcqSpare.size())) return false;
+    if (dataAcqSpare.size() >= 16) {
+        std::int32_t startLine = 0;
+        std::int32_t startPixel = 0;
+        std::int32_t numLines = 0;
+        std::int32_t numPixels = 0;
+        std::memcpy(&startLine, dataAcqSpare.data() + 0, sizeof(startLine));
+        std::memcpy(&startPixel, dataAcqSpare.data() + 4, sizeof(startPixel));
+        std::memcpy(&numLines, dataAcqSpare.data() + 8, sizeof(numLines));
+        std::memcpy(&numPixels, dataAcqSpare.data() + 12, sizeof(numPixels));
+        auto swap32 = [](std::int32_t v) {
+            std::uint32_t u = static_cast<std::uint32_t>(v);
+            u = (u >> 24) | ((u >> 8) & 0x0000FF00) |
+                ((u << 8) & 0x00FF0000) | (u << 24);
+            return static_cast<std::int32_t>(u);
+        };
+        startLine = swap32(startLine);
+        startPixel = swap32(startPixel);
+        numLines = swap32(numLines);
+        numPixels = swap32(numPixels);
+        if (startLine > 0 && startPixel > 0 && numLines > 0 && numPixels > 0 &&
+            static_cast<std::uint32_t>(numLines) <= annotation.imageDataChunkHeader.dataHeight &&
+            static_cast<std::uint32_t>(numPixels) <= annotation.imageDataChunkHeader.dataWidth) {
+            annotation.imageRect.startLine = static_cast<std::uint32_t>(startLine);
+            annotation.imageRect.startPixel = static_cast<std::uint32_t>(startPixel);
+            annotation.imageRect.numLines = static_cast<std::uint32_t>(numLines);
+            annotation.imageRect.numPixels = static_cast<std::uint32_t>(numPixels);
+        }
+    }
 
     if (!readU32Be(input_, annotation.seaspotTarget.tgtSelect) ||
         !readI32Be(input_, annotation.seaspotTarget.trackId) ||
@@ -364,18 +376,7 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
         annotation.notes.summary += " fileId=" + fileId;
     }
 
-    nextOffset = annotationPayloadStart +
-                 RpfConstants::kAnnotationHeaderSize +
-                 RpfConstants::kProcImgFileIdSize +
-                 RpfConstants::kImgDisplayParamSize +
-                 RpfConstants::kDataAcqInfoSize +
-                 RpfConstants::kSeaspotTargetSize +
-                 RpfConstants::kLandspotTargetSize +
-                 RpfConstants::kStripmapTargetSize +
-                 RpfConstants::kProcInParamSize +
-                 RpfConstants::kDataProcOutputSize +
-                 RpfConstants::kOwnAircraftInfoSize +
-                 RpfConstants::kProcIdParamSize;
+    nextOffset = header.bofOffsetToNextChunk;
 
     return true;
 }

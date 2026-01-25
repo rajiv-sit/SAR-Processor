@@ -332,7 +332,11 @@ bool writeRpfFile(const std::string& path,
     writeU32Be(output, options.dataAcquisition.resolution);
     writeU32Be(output, options.dataAcquisition.polarization);
     writeFixedString(output, options.dataAcquisition.hddrFileName, 40);
-    writeZeros(output, 88);
+    writeI32Be(output, static_cast<std::int32_t>(options.startLine));
+    writeI32Be(output, static_cast<std::int32_t>(options.startPixel));
+    writeI32Be(output, static_cast<std::int32_t>(height));
+    writeI32Be(output, static_cast<std::int32_t>(width));
+    writeZeros(output, 88 - 16);
     written += RpfConstants::kDataAcqInfoSize;
     writeU32Be(output, options.seaspotTarget.tgtSelect);
     writeI32Be(output, options.seaspotTarget.trackId);
@@ -400,9 +404,8 @@ bool writeRpfFile(const std::string& path,
     if (written > fixedAnnotationBytes) return setError(error, "RPF writer overflowed annotation block.");
     if (fixedAnnotationBytes > written) {
         writeZeros(output, fixedAnnotationBytes - written);
+        written = fixedAnnotationBytes;
     }
-    const auto annotationChunkEnd = output.tellp();
-    if (!finalizeChunkHeader(output, annotationChunkStart, annotationChunkEnd)) return setError(error, "Failed to finalize annotation chunk header.");
 
     const std::uint16_t gridLines = options.geolocationGridNumLines;
     for (std::uint16_t i = 0; i < gridLines; ++i) {
@@ -443,7 +446,11 @@ bool writeRpfFile(const std::string& path,
         writeF64Be(output, midLon);
         writeF64Be(output, endLat);
         writeF64Be(output, endLon);
+        written += 64u;
     }
+
+    const auto annotationChunkEnd = output.tellp();
+    if (!finalizeChunkHeader(output, annotationChunkStart, annotationChunkEnd)) return setError(error, "Failed to finalize annotation chunk header.");
 
     if (!writeChunkHeader(output, RpfConstants::kEndOfFileChunkTag, 0)) return setError(error, "Failed to write end-of-file chunk.");
 

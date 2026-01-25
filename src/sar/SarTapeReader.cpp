@@ -274,6 +274,24 @@ bool SarTapeReader::ensureAccessoryParsed() {
     }
 
     input_.clear();
+    input_.seekg(0, std::ios::end);
+    const std::streamoff fileSize = input_.tellg();
+    if (fileSize < static_cast<std::streamoff>(SarTapeConstants::kAccessoryRecordSize + 4)) {
+        input_.clear();
+        input_.seekg(0, std::ios::beg);
+        return true;
+    }
+
+    input_.seekg(static_cast<std::streamoff>(SarTapeConstants::kAccessoryRecordSize),
+                 std::ios::beg);
+    std::uint32_t syncAtOffset = 0;
+    if (!readU32Be(input_, syncAtOffset) || syncAtOffset != SarTapeConstants::kSyncWord) {
+        input_.clear();
+        input_.seekg(0, std::ios::beg);
+        return true;
+    }
+
+    input_.clear();
     input_.seekg(0, std::ios::beg);
 
     std::vector<std::uint8_t> buffer(SarTapeConstants::kAccessoryRecordSize);
@@ -299,6 +317,11 @@ bool SarTapeReader::readRecord(SarTraceRecord& record) {
         return false;
     }
     if (!ensureAccessoryParsed()) {
+        return false;
+    }
+
+    const std::streamoff recordStart = static_cast<std::streamoff>(input_.tellg());
+    if (recordStart < 0) {
         return false;
     }
 
@@ -333,8 +356,6 @@ bool SarTapeReader::readRecord(SarTraceRecord& record) {
 
     record.header = header;
     record.iqBytes.assign(SarTapeConstants::kRecordSize, 0);
-
-    std::size_t firstGoodVideoByte = 1 + SarTapeConstants::kRecordHeaderSize;
     const std::size_t lastGoodVideoByte = SarTapeConstants::kRecordSize - SarTapeConstants::kTestRampSize;
 
     if (header.recordType == SarTapeConstants::kRecordTypeSceneHeader) {
@@ -348,7 +369,16 @@ bool SarTapeReader::readRecord(SarTraceRecord& record) {
         if (!readSceneHeader(input_, sceneHeader_, error)) return false;
         hasSceneHeader_ = true;
 
-        firstGoodVideoByte += 4 + sceneHeader_.byteCount;
+    }
+
+    std::size_t firstGoodVideoByte = 1 + SarTapeConstants::kRecordHeaderSize;
+    const std::streamoff currentPos = static_cast<std::streamoff>(input_.tellg());
+    if (currentPos >= recordStart) {
+        const std::size_t offset = static_cast<std::size_t>(currentPos - recordStart);
+        const std::size_t positionByte = offset + 1;
+        if (positionByte > firstGoodVideoByte) {
+            firstGoodVideoByte = positionByte;
+        }
     }
 
     if (firstGoodVideoByte <= lastGoodVideoByte) {
