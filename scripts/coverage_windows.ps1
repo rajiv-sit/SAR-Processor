@@ -15,10 +15,18 @@ $excluded = @(
     "$PWD\\SarTape2Generator\\src\\main.cpp"
 )
 
-OpenCppCoverage.exe `
-    --modules SAR-Processor `
-    --sources SAR-Processor `
-    --excluded_sources $excluded `
-    --export_type cobertura:$Output `
-    -- `
-    "$BuildDir\\sar_core_tests.exe"
+$ocArgs = @(
+    "--modules", "SAR-Processor",
+    "--sources", "SAR-Processor",
+    "--export_type", "cobertura:$Output"
+)
+
+foreach ($pattern in $excluded) {
+    $ocArgs += "--excluded_sources"
+    $ocArgs += $pattern
+}
+
+$ocArgs += "--"
+$ocArgs += "$BuildDir\\$Config\\sar_core_tests.exe"
+
+OpenCppCoverage.exe @ocArgs

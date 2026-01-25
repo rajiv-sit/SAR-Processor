@@ -31,3 +31,7 @@ MATLAB-to-Cplusplus.md
 #folder
 md/
 tools/
+
+# Coverage
+coverage.xml
+LastCoverageResults.log

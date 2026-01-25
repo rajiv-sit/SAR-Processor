@@ -10,7 +10,7 @@ class CPlusPlusSarConan(ConanFile):
     name = "CPlusPlusSAR"
     version = "0.1.0"
     license = "MIT"
-    url = "https://example.com/CPlusPlusSAR"
+    url = "https://github.com/rajiv-sit/SAR-Processor"
     description = "C++23 SAR IQ-to-Image processing pipeline"
     settings = "os", "compiler", "build_type", "arch"
     exports_sources = "*"

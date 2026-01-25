@@ -33,6 +33,37 @@ void writeI32Be(std::ofstream& output, std::int32_t value) {
     writeU32Be(output, static_cast<std::uint32_t>(value));
 }
 
+std::uint16_t floatToHalf(float value) {
+    if (std::isnan(value)) {
+        return 0x7FFF;
+    }
+    if (std::isinf(value)) {
+        return value < 0.0f ? 0xFC00 : 0x7C00;
+    }
+    const float clamped = std::max(-65504.0f, std::min(65504.0f, value));
+    const std::uint32_t bits = *reinterpret_cast<const std::uint32_t*>(&clamped);
+    const std::uint32_t sign = (bits >> 16) & 0x8000;
+    const std::int32_t exp = static_cast<std::int32_t>((bits >> 23) & 0xFF) - 127 + 15;
+    const std::uint32_t mantissa = bits & 0x7FFFFF;
+
+    if (exp <= 0) {
+        if (exp < -10) {
+            return static_cast<std::uint16_t>(sign);
+        }
+        const std::uint32_t shift = static_cast<std::uint32_t>(14 - exp);
+        const std::uint32_t rounded = (mantissa | 0x800000) >> shift;
+        return static_cast<std::uint16_t>(sign | rounded);
+    }
+    if (exp >= 31) {
+        return static_cast<std::uint16_t>(sign | 0x7C00);
+    }
+
+    const std::uint16_t half = static_cast<std::uint16_t>(sign |
+                                                          (static_cast<std::uint32_t>(exp) << 10) |
+                                                          (mantissa >> 13));
+    return half;
+}
+
 void writeF32Be(std::ofstream& output, float value) {
     std::uint32_t raw = 0;
     std::memcpy(&raw, &value, sizeof(raw));
@@ -155,19 +186,58 @@ bool writeRpfFile(const std::string& path,
     writeU16Be(output, options.pixelMarginEnd);
     writeU16Be(output, options.lineMarginStart);
     writeU16Be(output, options.lineMarginEnd);
-    writeZeros(output, RpfConstants::kImageChunkHeaderSize - 24);
+    writeZeros(output, RpfConstants::kImageChunkHeaderSize - 28);
 
     if (!output) {
         error = "Failed to write image chunk header fields.";
         return false;
     }
 
-    if (options.pixelType == 0 || options.pixelType == 1) {
+    if (options.pixelType == 0) {
         for (std::int32_t row = 0; row < image.rows(); ++row) {
             for (std::int32_t col = 0; col < image.cols(); ++col) {
                 const float value = std::clamp(image(row, col), 0.0f, 255.0f);
                 const std::uint8_t byte = static_cast<std::uint8_t>(std::lround(value));
                 output.write(reinterpret_cast<const char*>(&byte), 1);
+            }
+        }
+    } else if (options.pixelType == 1) {
+        for (std::int32_t row = 0; row < image.rows(); ++row) {
+            for (std::int32_t col = 0; col < image.cols(); ++col) {
+                const double value = std::max(0.0, std::min(65535.0,
+                                                           static_cast<double>(image(row, col))));
+                writeU16Be(output, static_cast<std::uint16_t>(std::lround(value)));
+            }
+        }
+    } else if (options.pixelType == 2) {
+        for (std::int32_t row = 0; row < image.rows(); ++row) {
+            for (std::int32_t col = 0; col < image.cols(); ++col) {
+                const double value = std::max(0.0, std::min(4294967295.0,
+                                                           static_cast<double>(image(row, col))));
+                writeU32Be(output, static_cast<std::uint32_t>(std::llround(value)));
+            }
+        }
+    } else if (options.pixelType == 4) {
+        for (std::int32_t row = 0; row < image.rows(); ++row) {
+            for (std::int32_t col = 0; col < image.cols(); ++col) {
+                const std::uint16_t half = floatToHalf(image(row, col));
+                writeU16Be(output, half);
+            }
+        }
+    } else if (options.pixelType == 5) {
+        for (std::int32_t row = 0; row < image.rows(); ++row) {
+            for (std::int32_t col = 0; col < image.cols(); ++col) {
+                const float value = image(row, col);
+                writeF32Be(output, value);
+                writeF32Be(output, 0.0f);
+            }
+        }
+    } else if (options.pixelType == 6) {
+        for (std::int32_t row = 0; row < image.rows(); ++row) {
+            for (std::int32_t col = 0; col < image.cols(); ++col) {
+                const std::uint16_t half = floatToHalf(image(row, col));
+                writeU16Be(output, half);
+                writeU16Be(output, 0);
             }
         }
     } else {
