@@ -174,9 +174,7 @@ bool writeRpfFile(const std::string& path,
     const std::uint32_t width = static_cast<std::uint32_t>(image.cols());
     const std::uint32_t height = static_cast<std::uint32_t>(image.rows());
     const auto imageChunkStart = writeChunkHeaderPlaceholder(output, RpfConstants::kImageDataChunkTag);
-    if (!output) {
-        return setError(error, "Failed to write image chunk header.");
-    }
+    if (!output) return setError(error, "Failed to write image chunk header.");
 
     writeI32Be(output, options.frameSeqNum);
     writeI32Be(output, static_cast<std::int32_t>(width));
@@ -189,9 +187,7 @@ bool writeRpfFile(const std::string& path,
     writeU16Be(output, options.lineMarginEnd);
     writeZeros(output, RpfConstants::kImageChunkHeaderSize - 28);
 
-    if (!output) {
-        return setError(error, "Failed to write image chunk header fields.");
-    }
+    if (!output) return setError(error, "Failed to write image chunk header fields.");
 
     if (options.pixelType == 0) {
         for (std::int32_t row = 0; row < image.rows(); ++row) {
@@ -248,13 +244,9 @@ bool writeRpfFile(const std::string& path,
         }
     }
 
-    if (!output) {
-        return setError(error, "Failed to write image data.");
-    }
+    if (!output) return setError(error, "Failed to write image data.");
     const auto imageChunkEnd = output.tellp();
-    if (!finalizeChunkHeader(output, imageChunkStart, imageChunkEnd)) {
-        return setError(error, "Failed to finalize image chunk header.");
-    }
+    if (!finalizeChunkHeader(output, imageChunkStart, imageChunkEnd)) return setError(error, "Failed to finalize image chunk header.");
 
     const std::size_t fixedAnnotationBytes =
         RpfConstants::kAnnotationHeaderSize +
@@ -270,9 +262,7 @@ bool writeRpfFile(const std::string& path,
         RpfConstants::kProcIdParamSize;
 
     const auto annotationChunkStart = writeChunkHeaderPlaceholder(output, RpfConstants::kAnnotationDataChunkTag);
-    if (!output) {
-        return setError(error, "Failed to write annotation chunk header.");
-    }
+    if (!output) return setError(error, "Failed to write annotation chunk header.");
 
     std::size_t written = 0;
     writeZeros(output, RpfConstants::kAnnotationHeaderSize);
@@ -326,24 +316,16 @@ bool writeRpfFile(const std::string& path,
         written += 64u;
     }
 
-    if (written > fixedAnnotationBytes) {
-        return setError(error, "RPF writer overflowed annotation block.");
-    }
+    if (written > fixedAnnotationBytes) return setError(error, "RPF writer overflowed annotation block.");
     if (fixedAnnotationBytes > written) {
         writeZeros(output, fixedAnnotationBytes - written);
     }
     const auto annotationChunkEnd = output.tellp();
-    if (!finalizeChunkHeader(output, annotationChunkStart, annotationChunkEnd)) {
-        return setError(error, "Failed to finalize annotation chunk header.");
-    }
+    if (!finalizeChunkHeader(output, annotationChunkStart, annotationChunkEnd)) return setError(error, "Failed to finalize annotation chunk header.");
 
-    if (!writeChunkHeader(output, RpfConstants::kEndOfFileChunkTag, 0)) {
-        return setError(error, "Failed to write end-of-file chunk.");
-    }
+    if (!writeChunkHeader(output, RpfConstants::kEndOfFileChunkTag, 0)) return setError(error, "Failed to write end-of-file chunk.");
 
-    if (!output) {
-        return setError(error, "RPF writer failed while writing data.");
-    }
+    if (!output) return setError(error, "RPF writer failed while writing data.");
 
     return true;
 }

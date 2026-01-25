@@ -74,10 +74,7 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
             break;
         }
 
-        if (header.chunkType != RpfConstants::kImageDataChunkTag) {
-            input.seekg(static_cast<std::streamoff>(header.bofOffsetToNextChunk), std::ios::beg);
-            continue;
-        }
+        if (header.chunkType != RpfConstants::kImageDataChunkTag) { input.seekg(static_cast<std::streamoff>(header.bofOffsetToNextChunk), std::ios::beg); continue; }
 
         const std::uint32_t imageHeaderStart =
             chunkHeaderStart + RpfConstants::kChunkCommonHeaderSize;
@@ -93,15 +90,9 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
         std::uint16_t lineMarginStart = 0;
         std::uint16_t lineMarginEnd = 0;
 
-        if (!readI32Be(input, frameSeqNum) ||
-            !readI32Be(input, dataWidth) ||
-            !readI32Be(input, dataHeight) ||
-            !readI32Be(input, pixelType) ||
-            !readI32Be(input, rspInhibit) ||
-            !readU16Be(input, marginStart) ||
-            !readU16Be(input, marginEnd) ||
-            !readU16Be(input, lineMarginStart) ||
-            !readU16Be(input, lineMarginEnd)) return false;
+        if (!readI32Be(input, frameSeqNum) || !readI32Be(input, dataWidth) || !readI32Be(input, dataHeight) ||
+            !readI32Be(input, pixelType) || !readI32Be(input, rspInhibit) || !readU16Be(input, marginStart) ||
+            !readU16Be(input, marginEnd) || !readU16Be(input, lineMarginStart) || !readU16Be(input, lineMarginEnd)) return false;
 
         const auto imageHeaderEnd = imageHeaderStart + RpfConstants::kImageChunkHeaderSize;
         if (static_cast<std::uint32_t>(input.tellg()) < imageHeaderEnd) {
@@ -112,8 +103,7 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
         const auto annotationStart = static_cast<std::uint32_t>(input.tellg());
         ChunkHeader annotationHeader{};
         if (!readChunkHeader(input, annotationHeader)) return false;
-        if (annotationHeader.syncCode != RpfConstants::kChunkSyncCode ||
-            annotationHeader.chunkType != RpfConstants::kAnnotationDataChunkTag) return false;
+        if (annotationHeader.syncCode != RpfConstants::kChunkSyncCode || annotationHeader.chunkType != RpfConstants::kAnnotationDataChunkTag) return false;
 
         const std::uint32_t annotationPayloadStart =
             annotationStart + RpfConstants::kChunkCommonHeaderSize;

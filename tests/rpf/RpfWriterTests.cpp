@@ -49,3 +49,15 @@ TEST(RpfWriterTests, WritesHalfWithSpecialValues) {
     ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, error)) << error;
     EXPECT_TRUE(std::filesystem::exists(path));
 }
+
+TEST(RpfWriterTests, WritesHalfWithSubnormalValue) {
+    Eigen::MatrixXf image(1, 1);
+    image << 1e-6f;
+    rpf::RpfWriteOptions options{};
+    options.pixelType = 4;
+    options.radarMode = 1;
+    const auto path = std::filesystem::temp_directory_path() / "rpf_half_subnormal.rpf";
+    std::string error;
+    ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, error)) << error;
+    EXPECT_TRUE(std::filesystem::exists(path));
+}

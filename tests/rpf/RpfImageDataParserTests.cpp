@@ -199,3 +199,24 @@ TEST(RpfImageDataParserTests, RejectsZeroDimensionsWhenSkipping) {
     rpf::RpfImageDataParser parser;
     EXPECT_FALSE(parser.parseImageData(input, header, true, image));
 }
+
+TEST(RpfImageDataParserTests, HandlesHalfSubnormalAndInf) {
+    const auto path = makeTempPath("rpf_half_special");
+    std::ofstream output(path, std::ios::binary);
+    ASSERT_TRUE(output);
+    writeU16Be(output, 0x0001);
+    writeU16Be(output, 0x7C00);
+    output.close();
+
+    std::ifstream input(path, std::ios::binary);
+    rpf::ImageDataChunkHeader header{};
+    header.dataWidth = 2;
+    header.dataHeight = 1;
+    header.pixelType = 4;
+
+    Eigen::MatrixXf image;
+    rpf::RpfImageDataParser parser;
+    ASSERT_TRUE(parser.parseImageData(input, header, false, image));
+    EXPECT_GT(image(0, 0), 0.0f);
+    EXPECT_TRUE(std::isinf(image(0, 1)));
+}

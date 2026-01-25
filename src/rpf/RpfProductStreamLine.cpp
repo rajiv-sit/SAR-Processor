@@ -160,9 +160,7 @@ bool readLineData(std::ifstream& input,
                 break;
             }
             default: {
-                if (!readFloatBe(input, value)) {
-                    return false;
-                }
+                if (!readFloatBe(input, value)) return false;
                 break;
             }
         }
@@ -208,7 +206,8 @@ bool RpfProductStreamLine::init(const std::string& fileName,
             error = "No files found for stripmap acquisition";
             return false;
         }
-    } else {
+    }
+    if (!isStripmap) {
         files = {fileName};
         if (frameNum <= 0) {
             frameNum = 1;
@@ -218,9 +217,7 @@ bool RpfProductStreamLine::init(const std::string& fileName,
     bool foundFrame = isStripmap;
     for (const auto& path : files) {
         RpfQueryResult fileQuery{};
-        if (!queryRpfFile(path, fileQuery)) {
-            continue;
-        }
+        if (!queryRpfFile(path, fileQuery)) continue;
 
         for (std::size_t idx = 0; idx < fileQuery.startNums.size(); ++idx) {
             if (!isStripmap && fileQuery.startNums[idx] != frameNum) {
@@ -254,9 +251,7 @@ bool RpfProductStreamLine::init(const std::string& fileName,
         rpf::AnnotationStruct annotation{};
         rpf::LatLongGrid grid{};
         RpfChunkReader reader(stream.blocks_[i].path);
-        if (!reader.isOpen()) {
-            continue;
-        }
+        if (!reader.isOpen()) continue;
         if (reader.readBlock(static_cast<std::uint32_t>(i + 1), annotation, grid, true)) {
             appendLatLong(stream.latLongGrid_, grid);
         }
@@ -274,9 +269,7 @@ RpfProductStreamLine RpfProductStreamLine::makeSynthetic(const std::vector<RpfSt
 }
 
 bool RpfProductStreamLine::readLine(int lineNum, std::vector<float>& lineData) const {
-    if (blocks_.empty()) {
-        return false;
-    }
+    if (blocks_.empty()) return false;
 
     const RpfStreamBlock* target = nullptr;
     for (const auto& block : blocks_) {
@@ -301,13 +294,9 @@ bool RpfProductStreamLine::readLine(int lineNum, std::vector<float>& lineData) c
             static_cast<std::int64_t>(target->numPixels);
 
     std::ifstream input(target->path, std::ios::binary);
-    if (!input) {
-        return false;
-    }
+    if (!input) return false;
     input.seekg(byteOffset, std::ios::beg);
-    if (!input) {
-        return false;
-    }
+    if (!input) return false;
 
     return readLineData(input, target->pixelType, target->numPixels, lineData);
 }
@@ -402,9 +391,7 @@ bool RpfProductStreamLine::getLatLong(int line, int pixel, double& lat, double& 
             gridPixelIdx = 1;
         }
     }
-    if (gridPixelIdx < 0 || gridPixelIdx > 2) {
-        return false;
-    }
+    if (gridPixelIdx < 0 || gridPixelIdx > 2) return false;
 
     lat = gridLine[gridPixelIdx][0];
     lon = gridLine[gridPixelIdx][1];

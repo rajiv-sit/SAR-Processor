@@ -9,12 +9,6 @@
 namespace sar {
 
 namespace {
-
-bool setError(std::string& error, const char* message) {
-    error = message;
-    return false;
-}
-
 bool readBytes(std::ifstream& input, std::uint8_t* buffer, std::size_t size) {
     input.read(reinterpret_cast<char*>(buffer), static_cast<std::streamsize>(size));
     return static_cast<bool>(input);
@@ -85,49 +79,35 @@ bool readPerkinElmerFloat(std::ifstream& input, double& value) {
 
 bool readSceneHeader(std::ifstream& input, SarSceneHeader& sceneHeader, std::string& error) {
     std::uint16_t byteCount = 0;
-    if (!readU16Be(input, byteCount)) {
-        return setError(error, "failed to read scene header byteCount");
-    }
+    if (!readU16Be(input, byteCount)) return (error = "failed to read scene header byteCount", false);
     if (byteCount > SarTapeConstants::kMaxSceneHeaderSize) {
         byteCount = SarTapeConstants::kMaxSceneHeaderSize;
     }
     sceneHeader.byteCount = byteCount;
 
-    if (!readU16Be(input, sceneHeader.sceneNumber) ||
-        !readU32Be(input, sceneHeader.timeStampStartCollect)) {
-        return setError(error, "failed to read scene header preamble");
-    }
+    if (!readU16Be(input, sceneHeader.sceneNumber)) return (error = "failed to read scene header preamble", false);
+    if (!readU32Be(input, sceneHeader.timeStampStartCollect)) return (error = "failed to read scene header preamble", false);
 
     std::uint32_t coarseDelay = 0;
     std::uint8_t fineDelay = 0;
-    if (!readU24Be(input, coarseDelay) || !readBytes(input, &fineDelay, 1)) {
-        return setError(error, "failed to read initial range delay");
-    }
+    if (!readU24Be(input, coarseDelay) || !readBytes(input, &fineDelay, 1)) return (error = "failed to read initial range delay", false);
     const double delayConvFactor = 20.0 / 256.0;
     sceneHeader.initRangeDelay = (256.0 * coarseDelay + fineDelay) * delayConvFactor;
 
     std::int16_t rangeDelayIncr = 0;
-    if (!readI16Be(input, rangeDelayIncr)) {
-        return setError(error, "failed to read range delay increment");
-    }
+    if (!readI16Be(input, rangeDelayIncr)) return (error = "failed to read range delay increment", false);
     sceneHeader.rangeDelayIncr = rangeDelayIncr * delayConvFactor;
     sceneHeader.numPulsesSpot = static_cast<std::uint16_t>(readStrangeShort(input, false, true));
     sceneHeader.endCountStrip = readStrangeShort(input, true, true);
 
-    if (!readU16Be(input, sceneHeader.sarTapeVolNum)) {
-        return setError(error, "failed to read sarTapeVolNum");
-    }
+    if (!readU16Be(input, sceneHeader.sarTapeVolNum)) return (error = "failed to read sarTapeVolNum", false);
 
     std::array<char, 4> mission{};
-    if (!readBytes(input, reinterpret_cast<std::uint8_t*>(mission.data()), mission.size())) {
-        return setError(error, "failed to read missionID");
-    }
+    if (!readBytes(input, reinterpret_cast<std::uint8_t*>(mission.data()), mission.size())) return (error = "failed to read missionID", false);
     sceneHeader.missionId.assign(mission.data(), mission.size());
 
     std::uint8_t samplingFreqCode = 0;
-    if (!readBytes(input, &samplingFreqCode, 1)) {
-        return setError(error, "failed to read samplingFreq");
-    }
+    if (!readBytes(input, &samplingFreqCode, 1)) return (error = "failed to read samplingFreq", false);
     if (samplingFreqCode == 255) {
         sceneHeader.samplingFreq = 500.0;
     } else if (samplingFreqCode == 31) {
@@ -136,55 +116,47 @@ bool readSceneHeader(std::ifstream& input, SarSceneHeader& sceneHeader, std::str
         sceneHeader.samplingFreq = samplingFreqCode;
     }
 
-    if (!readBytes(input, &sceneHeader.sarMode, 1) ||
-        !readU16Be(input, sceneHeader.unUsed1) ||
-        !readU32Be(input, sceneHeader.timeStampT0) ||
-        !readU16Be(input, sceneHeader.pri) ||
-        !readBytes(input, &sceneHeader.targSelectMethod, 1) ||
-        !readBytes(input, &sceneHeader.recvrGain, 1) ||
-        !readPerkinElmerFloat(input, sceneHeader.headingT0) ||
-        !readPerkinElmerFloat(input, sceneHeader.velocityT0) ||
-        !readPerkinElmerFloat(input, sceneHeader.trackAngleT0) ||
-        !readU32Be(input, sceneHeader.altitudeT0) ||
-        !readPerkinElmerFloat(input, sceneHeader.targLatitudeT0) ||
-        !readPerkinElmerFloat(input, sceneHeader.targLongitudeT0) ||
-        !readU32Be(input, sceneHeader.targRangeT0) ||
-        !readPerkinElmerFloat(input, sceneHeader.targAzimuthT0) ||
-        !readPerkinElmerFloat(input, sceneHeader.targDepAngleT0) ||
-        !readU32Be(input, sceneHeader.targRangeSceCtr) ||
-        !readPerkinElmerFloat(input, sceneHeader.targEtaSceCtr) ||
-        !readPerkinElmerFloat(input, sceneHeader.targDepAngSceCtr) ||
-        !readU16Be(input, sceneHeader.tauAmplitude) ||
-        !readU16Be(input, sceneHeader.radarFreq) ||
-        !readU16Be(input, sceneHeader.radarPulseWidth)) {
-        return setError(error, "failed to read scene header fields");
-    }
+    if (!readBytes(input, &sceneHeader.sarMode, 1)) return (error = "failed to read scene header fields", false);
+    if (!readU16Be(input, sceneHeader.unUsed1)) return (error = "failed to read scene header fields", false);
+    if (!readU32Be(input, sceneHeader.timeStampT0)) return (error = "failed to read scene header fields", false);
+    if (!readU16Be(input, sceneHeader.pri)) return (error = "failed to read scene header fields", false);
+    if (!readBytes(input, &sceneHeader.targSelectMethod, 1)) return (error = "failed to read scene header fields", false);
+    if (!readBytes(input, &sceneHeader.recvrGain, 1)) return (error = "failed to read scene header fields", false);
+    if (!readPerkinElmerFloat(input, sceneHeader.headingT0)) return (error = "failed to read scene header fields", false);
+    if (!readPerkinElmerFloat(input, sceneHeader.velocityT0)) return (error = "failed to read scene header fields", false);
+    if (!readPerkinElmerFloat(input, sceneHeader.trackAngleT0)) return (error = "failed to read scene header fields", false);
+    if (!readU32Be(input, sceneHeader.altitudeT0)) return (error = "failed to read scene header fields", false);
+    if (!readPerkinElmerFloat(input, sceneHeader.targLatitudeT0)) return (error = "failed to read scene header fields", false);
+    if (!readPerkinElmerFloat(input, sceneHeader.targLongitudeT0)) return (error = "failed to read scene header fields", false);
+    if (!readU32Be(input, sceneHeader.targRangeT0)) return (error = "failed to read scene header fields", false);
+    if (!readPerkinElmerFloat(input, sceneHeader.targAzimuthT0)) return (error = "failed to read scene header fields", false);
+    if (!readPerkinElmerFloat(input, sceneHeader.targDepAngleT0)) return (error = "failed to read scene header fields", false);
+    if (!readU32Be(input, sceneHeader.targRangeSceCtr)) return (error = "failed to read scene header fields", false);
+    if (!readPerkinElmerFloat(input, sceneHeader.targEtaSceCtr)) return (error = "failed to read scene header fields", false);
+    if (!readPerkinElmerFloat(input, sceneHeader.targDepAngSceCtr)) return (error = "failed to read scene header fields", false);
+    if (!readU16Be(input, sceneHeader.tauAmplitude)) return (error = "failed to read scene header fields", false);
+    if (!readU16Be(input, sceneHeader.radarFreq)) return (error = "failed to read scene header fields", false);
+    if (!readU16Be(input, sceneHeader.radarPulseWidth)) return (error = "failed to read scene header fields", false);
 
     std::uint16_t linearFMRate = 0;
-    if (!readU16Be(input, linearFMRate)) {
-        return setError(error, "failed to read linearFMRate");
-    }
+    if (!readU16Be(input, linearFMRate)) return (error = "failed to read linearFMRate", false);
     sceneHeader.linearFMRate = linearFMRate;
 
     if (sceneHeader.linearFMRate == 22.0) {
         sceneHeader.linearFMRate = 22.5;
     }
 
-    if (!readBytes(input, &sceneHeader.priChangeFlag, 1) ||
-        !readBytes(input, &sceneHeader.varRngDelayIncrFlag, 1) ||
-        !readBytes(input, &sceneHeader.phaseCorrFlag, 1) ||
-        !readBytes(input, &sceneHeader.rngCurvDisabledFlag, 1)) {
-        return setError(error, "failed to read flag bytes");
-    }
+    if (!readBytes(input, &sceneHeader.priChangeFlag, 1)) return (error = "failed to read flag bytes", false);
+    if (!readBytes(input, &sceneHeader.varRngDelayIncrFlag, 1)) return (error = "failed to read flag bytes", false);
+    if (!readBytes(input, &sceneHeader.phaseCorrFlag, 1)) return (error = "failed to read flag bytes", false);
+    if (!readBytes(input, &sceneHeader.rngCurvDisabledFlag, 1)) return (error = "failed to read flag bytes", false);
 
     std::array<char, 4> ctrlVer{};
     std::array<char, 4> navVer{};
-    if (!readBytes(input, reinterpret_cast<std::uint8_t*>(ctrlVer.data()), ctrlVer.size()) ||
-        !readBytes(input, reinterpret_cast<std::uint8_t*>(navVer.data()), navVer.size()) ||
-        !readU32Be(input, sceneHeader.unUsed2) ||
-        !readU16Be(input, sceneHeader.endMsgCode)) {
-        return setError(error, "failed to read version/footer fields");
-    }
+    if (!readBytes(input, reinterpret_cast<std::uint8_t*>(ctrlVer.data()), ctrlVer.size())) return (error = "failed to read version/footer fields", false);
+    if (!readBytes(input, reinterpret_cast<std::uint8_t*>(navVer.data()), navVer.size())) return (error = "failed to read version/footer fields", false);
+    if (!readU32Be(input, sceneHeader.unUsed2)) return (error = "failed to read version/footer fields", false);
+    if (!readU16Be(input, sceneHeader.endMsgCode)) return (error = "failed to read version/footer fields", false);
     sceneHeader.ctrlCompSwVersion.assign(ctrlVer.data(), ctrlVer.size());
     sceneHeader.navCompSwVersion.assign(navVer.data(), navVer.size());
 
@@ -253,16 +225,12 @@ bool SarTapeReader::readRecord(SarTraceRecord& record) {
     if (header.recordType == SarTapeConstants::kRecordTypeSceneHeader) {
         std::uint16_t recordLength = 0;
         std::uint16_t videoByteCount = 0;
-        if (!readU16Be(input_, recordLength) || !readU16Be(input_, videoByteCount)) {
-            return false;
-        }
+        if (!readU16Be(input_, recordLength) || !readU16Be(input_, videoByteCount)) return false;
         sceneHeader_.recordLength = recordLength;
         sceneHeader_.videoByteCount = videoByteCount;
 
         std::string error;
-        if (!readSceneHeader(input_, sceneHeader_, error)) {
-            return false;
-        }
+        if (!readSceneHeader(input_, sceneHeader_, error)) return false;
         hasSceneHeader_ = true;
 
         firstGoodVideoByte += 4 + sceneHeader_.byteCount;
@@ -272,9 +240,7 @@ bool SarTapeReader::readRecord(SarTraceRecord& record) {
         const std::size_t goodBytes = lastGoodVideoByte - firstGoodVideoByte + 1;
         input_.read(reinterpret_cast<char*>(record.iqBytes.data() + (firstGoodVideoByte - 1)),
                     static_cast<std::streamsize>(goodBytes));
-        if (!input_) {
-            return false;
-        }
+        if (!input_) return false;
     }
 
     if (header.recordType == SarTapeConstants::kRecordTypeDummy && header.recordNumber == 1) {
@@ -285,9 +251,7 @@ bool SarTapeReader::readRecord(SarTraceRecord& record) {
 
     if (SarTapeConstants::kTestRampSize > 0) {
         input_.seekg(static_cast<std::streamoff>(SarTapeConstants::kTestRampSize), std::ios::cur);
-        if (!input_) {
-            return false;
-        }
+        if (!input_) return false;
     }
 
     return true;

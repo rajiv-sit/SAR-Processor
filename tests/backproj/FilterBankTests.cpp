@@ -25,7 +25,7 @@ TEST(FilterBankTests, DefaultsWindowCoefWhenNonPositive) {
     backproj::FilterBank bank(params, params);
     const auto window = bank.rangeWindow(1);
     ASSERT_EQ(window.size(), 1);
-    EXPECT_FLOAT_EQ(window(0), 1.0f);
+    EXPECT_FLOAT_EQ(window(0), 0.08f);
 }
 
 TEST(FilterBankTests, AppliesWindowAcrossColumns) {

@@ -23,6 +23,8 @@ TEST(TtlRunnerTests, ParsesPrsConfig) {
     const auto reportPath = makeTempPath("pta_report.txt");
     std::ofstream output(configPath);
     ASSERT_TRUE(output);
+    output << "# comment\n";
+    output << "invalid_line\n";
     output << "reportPath=" << reportPath.string() << "\n";
     output << "reportFormat=text\n";
     output.close();
@@ -37,6 +39,11 @@ TEST(TtlRunnerTests, ParsesPrsConfig) {
                         std::istreambuf_iterator<char>());
     EXPECT_NE(content.find("inputConfig="), std::string::npos);
     EXPECT_NE(content.find("reportFormat=text"), std::string::npos);
+}
+
+TEST(TtlRunnerTests, FailsWhenConfigMissing) {
+    pta::TtlRunner runner;
+    EXPECT_FALSE(runner.runFromConfig("missing_config.prs"));
 }
 
 TEST(TtlRunnerTests, WritesJsonReport) {
@@ -65,7 +72,7 @@ TEST(TtlRunnerTests, ParsesJsonConfig) {
     std::ofstream output(configPath);
     ASSERT_TRUE(output);
     output << "{\n";
-    output << "  \"reportPath\": \"" << reportPath.string() << "\",\n";
+    output << "  \"reportPath\": \"" << reportPath.generic_string() << "\",\n";
     output << "  \"reportFormat\": \"json\"\n";
     output << "}\n";
     output.close();
@@ -86,7 +93,7 @@ TEST(TtlRunnerTests, FallsBackToTextForUnknownFormat) {
     std::ofstream output(configPath);
     ASSERT_TRUE(output);
     output << "{\n";
-    output << "  \"reportPath\": \"" << reportPath.string() << "\",\n";
+    output << "  \"reportPath\": \"" << reportPath.generic_string() << "\",\n";
     output << "  \"reportFormat\": \"unknown\"\n";
     output << "}\n";
     output.close();
@@ -107,7 +114,7 @@ TEST(TtlRunnerTests, FailsWhenReportPathInvalid) {
     std::ofstream output(configPath);
     ASSERT_TRUE(output);
     output << "{\n";
-    output << "  \"reportPath\": \"" << reportPath.string() << "\",\n";
+    output << "  \"reportPath\": \"" << reportPath.generic_string() << "\",\n";
     output << "  \"reportFormat\": \"text\"\n";
     output << "}\n";
     output.close();

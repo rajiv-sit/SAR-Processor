@@ -24,11 +24,13 @@ int getFileCounter(const std::string& fileName) {
         return -1;
     }
     const std::string counter = stem.substr(underscore + 1);
+    int value = -1;
     try {
-        return std::stoi(counter);
+        value = std::stoi(counter);
     } catch (...) {
-        return -1;
+        value = -1;
     }
+    return value;
 }
 
 std::vector<std::string> findFiles(const std::string& baseFileName) {

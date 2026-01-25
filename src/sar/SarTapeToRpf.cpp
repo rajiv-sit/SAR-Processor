@@ -32,9 +32,7 @@ bool writeRpfFromSarTape(const std::string& sarTapePath,
         }
 
         const std::size_t samples = record.iqBytes.size() / 2;
-        if (samples == 0) {
-            continue;
-        }
+        if (samples == 0) continue;
 
         if (width == 0) {
             width = samples;

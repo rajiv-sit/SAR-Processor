@@ -417,6 +417,23 @@ TEST(RpfProductStreamLineTests, ReadLineFailsOnTruncatedComplexHalf) {
     EXPECT_FALSE(stream.readLine(1, line));
 }
 
+TEST(RpfProductStreamLineTests, ReadsHalfSubnormalValue) {
+    const auto path = makeTempPath("half_subnormal");
+    writeBytes(path, {0x00, 0x01});
+    rpf::RpfStreamBlock block{};
+    block.path = path.string();
+    block.startLine = 1;
+    block.numLines = 1;
+    block.numPixels = 1;
+    block.pixelType = 4;
+    block.bofImgOffset = 0;
+    const auto stream = rpf::RpfProductStreamLine::makeSynthetic({block}, {});
+    std::vector<float> line;
+    ASSERT_TRUE(stream.readLine(1, line));
+    ASSERT_EQ(line.size(), 1u);
+    EXPECT_GT(line[0], 0.0f);
+}
+
 TEST(RpfProductStreamLineTests, InterpolatesPixelWhenOffGrid) {
     rpf::LatLongGrid grid{};
     grid.lineNumber = {1, 3};
@@ -442,6 +459,32 @@ TEST(RpfProductStreamLineTests, InterpolatesPixelWhenOffGrid) {
     double gr = 0.0;
     ASSERT_TRUE(stream.getLatLong(2, 2, lat, lon, gr));
     EXPECT_GT(lat, 0.0);
+}
+
+TEST(RpfProductStreamLineTests, HandlesLineBeforeFirstGrid) {
+    rpf::LatLongGrid grid{};
+    grid.lineNumber = {5, 10};
+    grid.beginLatitude = {0.0, 10.0};
+    grid.beginLongitude = {0.0, 10.0};
+    grid.beginGrSrRatio = {1.0, 2.0};
+    grid.midLatitude = {10.0, 20.0};
+    grid.midLongitude = {10.0, 20.0};
+    grid.midGrSrRatio = {2.0, 3.0};
+    grid.endLatitude = {20.0, 30.0};
+    grid.endLongitude = {20.0, 30.0};
+    grid.endGrSrRatio = {3.0, 4.0};
+
+    rpf::RpfStreamBlock block{};
+    block.startLine = 1;
+    block.numLines = 10;
+    block.numPixels = 5;
+    block.pixelType = 0;
+
+    const auto stream = rpf::RpfProductStreamLine::makeSynthetic({block}, grid);
+    double lat = 0.0;
+    double lon = 0.0;
+    double gr = 0.0;
+    EXPECT_TRUE(stream.getLatLong(1, 1, lat, lon, gr));
 }
 
 TEST(RpfProductStreamLineTests, ClampsPixelOutsideGrid) {

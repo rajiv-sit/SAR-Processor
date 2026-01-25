@@ -102,8 +102,7 @@ bool RpfChunkReader::readBlock(std::uint32_t blockIndex,
         if (!readGeoGridLines(annotation, latLongGrid)) return false;
 
         input_.seekg(static_cast<std::streamoff>(nextOffset), std::ios::beg);
-        return true;
-    }
+        return true; }
 }
 
 bool RpfChunkReader::readChunkHeader(RpfChunkHeader& header) {
@@ -129,10 +128,8 @@ bool RpfChunkReader::readImageDataChunkHeader(ImageDataChunkHeader& header, std:
     header.dataHeight = static_cast<std::uint32_t>(dataHeight);
     if (!readI32Be(input_, header.pixelType)) return false;
     if (!readI32Be(input_, header.rspInhibit)) return false;
-    if (!readU16Be(input_, header.pixelMarginStart) ||
-        !readU16Be(input_, header.pixelMarginEnd) ||
-        !readU16Be(input_, header.lineMarginStart) ||
-        !readU16Be(input_, header.lineMarginEnd)) return false;
+    if (!readU16Be(input_, header.pixelMarginStart) || !readU16Be(input_, header.pixelMarginEnd) ||
+        !readU16Be(input_, header.lineMarginStart) || !readU16Be(input_, header.lineMarginEnd)) return false;
     const auto position = static_cast<std::uint32_t>(input_.tellg());
     const auto headerEnd = headerStart + RpfConstants::kImageChunkHeaderSize;
     if (position < headerEnd) {
@@ -146,8 +143,7 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
     const auto annotationStart = static_cast<std::uint32_t>(input_.tellg());
     RpfChunkHeader header{};
     if (!readChunkHeader(header)) return false;
-    if (header.syncCode != RpfConstants::kChunkSyncCode ||
-        header.chunkType != RpfConstants::kAnnotationDataChunkTag) return false;
+    if (header.syncCode != RpfConstants::kChunkSyncCode || header.chunkType != RpfConstants::kAnnotationDataChunkTag) return false;
     const auto annotationPayloadStart =
         annotationStart + RpfConstants::kChunkCommonHeaderSize;
     input_.seekg(static_cast<std::streamoff>(annotationPayloadStart + RpfConstants::kAnnotationHeaderSize),
