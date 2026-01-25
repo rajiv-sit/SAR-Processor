@@ -20,6 +20,10 @@ struct SarTapeConstants {
     static constexpr std::uint32_t kMaxVideoRecsPerScene = 32772;
     static constexpr std::uint32_t kMaxVideoRecsSpot = 12448;
     static constexpr std::uint16_t kMaxSceneHeaderSize = 122;
+    static constexpr std::size_t kAccessoryRecordSize = 8192;
+    static constexpr std::size_t kTargetPosMsgSize = 35;
+    static constexpr std::size_t kTargetPosDataStart = 528;
+    static constexpr std::size_t kTargetPosDataEnd = 2576;
 };
 
 }  // namespace sar

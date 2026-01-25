@@ -3,6 +3,7 @@
 #include <array>
 #include <cstring>
 #include <string>
+#include <vector>
 #include <Eigen/Core>
 
 #include "rpf/RpfConstants.hpp"
@@ -39,6 +40,64 @@ bool readI32Be(std::ifstream& input, std::int32_t& value) {
     if (!readU32Be(input, temp)) return false;
     value = static_cast<std::int32_t>(temp);
     return true;
+}
+
+bool readF32Be(std::ifstream& input, float& value) {
+    std::uint32_t raw = 0;
+    if (!readU32Be(input, raw)) return false;
+    std::memcpy(&value, &raw, sizeof(value));
+    return true;
+}
+
+bool readF64Be(std::ifstream& input, double& value) {
+    std::array<std::uint8_t, 8> buf{};
+    if (!readBytes(input, buf.data(), buf.size())) return false;
+    std::uint64_t raw = (static_cast<std::uint64_t>(buf[0]) << 56) |
+                        (static_cast<std::uint64_t>(buf[1]) << 48) |
+                        (static_cast<std::uint64_t>(buf[2]) << 40) |
+                        (static_cast<std::uint64_t>(buf[3]) << 32) |
+                        (static_cast<std::uint64_t>(buf[4]) << 24) |
+                        (static_cast<std::uint64_t>(buf[5]) << 16) |
+                        (static_cast<std::uint64_t>(buf[6]) << 8) |
+                        static_cast<std::uint64_t>(buf[7]);
+    std::memcpy(&value, &raw, sizeof(value));
+    return true;
+}
+
+std::string readFixedString(std::ifstream& input, std::size_t size) {
+    std::string value(size, '\0');
+    input.read(value.data(), static_cast<std::streamsize>(size));
+    if (!input) {
+        return {};
+    }
+    const auto endPos = value.find('\0');
+    if (endPos != std::string::npos) {
+        value.resize(endPos);
+    }
+    return value;
+}
+
+rpf::UtcDateTime readUtcDateTime(std::ifstream& input) {
+    rpf::UtcDateTime utc{};
+    std::uint16_t yearMonth = 0;
+    std::uint16_t dayHourMin = 0;
+    std::uint16_t secMsec = 0;
+    std::uint16_t reserved = 0;
+    if (!readU16Be(input, yearMonth) ||
+        !readU16Be(input, dayHourMin) ||
+        !readU16Be(input, secMsec) ||
+        !readU16Be(input, reserved)) {
+        return utc;
+    }
+    utc.year = static_cast<std::uint16_t>((yearMonth >> 4) & 0x0FFF);
+    utc.month = static_cast<std::uint8_t>(yearMonth & 0x000F);
+    utc.day = static_cast<std::uint8_t>((dayHourMin >> 11) & 0x1F);
+    utc.hour = static_cast<std::uint8_t>((dayHourMin >> 6) & 0x1F);
+    utc.minute = static_cast<std::uint8_t>(dayHourMin & 0x3F);
+    utc.second = static_cast<std::uint8_t>((secMsec >> 10) & 0x3F);
+    utc.millisec = static_cast<std::uint16_t>(secMsec & 0x03FF);
+    (void)reserved;
+    return utc;
 }
 
 }  // namespace
@@ -101,8 +160,8 @@ bool RpfChunkReader::readBlock(std::uint32_t blockIndex,
 
         if (!readGeoGridLines(annotation, latLongGrid)) return false;
 
-        input_.seekg(static_cast<std::streamoff>(nextOffset), std::ios::beg);
-        return true; }
+        return true;
+    }
 }
 
 bool RpfChunkReader::readChunkHeader(RpfChunkHeader& header) {
@@ -155,21 +214,26 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
     annotation.fileIdParams.radarMode = static_cast<std::uint8_t>(radarMode);
     annotation.fileIdParams.fileType = fileType;
 
-    std::string fileId;
-    fileId.resize(32, '\0');
-    input_.read(fileId.data(), static_cast<std::streamsize>(fileId.size()));
+    annotation.processedImageFileId.fileType = fileType;
+    annotation.processedImageFileId.radarMode = radarMode;
+    annotation.processedImageFileId.formatVersion = readFixedString(input_, 16);
     if (!input_) return false;
-    const auto endPos = fileId.find('\0');
-    if (endPos != std::string::npos) {
-        fileId.resize(endPos);
-    }
+    std::string fileId = readFixedString(input_, 40);
+    if (!input_) return false;
     if (!fileId.empty()) {
         annotation.fileName = fileId;
     }
 
-    const auto dataAcqOffset =
+    const auto imgDisplayOffset =
         annotationPayloadStart + RpfConstants::kAnnotationHeaderSize +
-        RpfConstants::kProcImgFileIdSize + RpfConstants::kImgDisplayParamSize;
+        RpfConstants::kProcImgFileIdSize;
+    input_.seekg(static_cast<std::streamoff>(imgDisplayOffset), std::ios::beg);
+    annotation.imgDisplayParams.bytes.resize(RpfConstants::kImgDisplayParamSize);
+    input_.read(reinterpret_cast<char*>(annotation.imgDisplayParams.bytes.data()),
+                static_cast<std::streamsize>(annotation.imgDisplayParams.bytes.size()));
+    if (!input_) return false;
+
+    const auto dataAcqOffset = imgDisplayOffset + RpfConstants::kImgDisplayParamSize;
     input_.seekg(static_cast<std::streamoff>(dataAcqOffset), std::ios::beg);
     std::int32_t startLine = 0;
     std::int32_t startPixel = 0;
@@ -188,32 +252,109 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
         annotation.imageRect.numPixels = static_cast<std::uint32_t>(numPixels);
     }
 
+    annotation.dataAcquisition.aircraftId = readFixedString(input_, 6);
+    if (!input_) return false;
+    std::uint8_t padding[2] = {};
+    if (!readBytes(input_, padding, sizeof(padding))) return false;
+    annotation.dataAcquisition.sortieNumber = readFixedString(input_, 8);
+    if (!input_) return false;
+    annotation.dataAcquisition.currentMissionStartTime = readUtcDateTime(input_);
+    annotation.dataAcquisition.rawDataMissionStartTime = readUtcDateTime(input_);
+    if (!readI32Be(input_, annotation.dataAcquisition.currentAcqId) ||
+        !readI32Be(input_, annotation.dataAcquisition.rawDataAcqId)) {
+        return false;
+    }
+    annotation.dataAcquisition.currentAcqStartTime = readUtcDateTime(input_);
+    annotation.dataAcquisition.rawDataAcqStartTime = readUtcDateTime(input_);
+    if (!readU32Be(input_, annotation.dataAcquisition.resolution) ||
+        !readU32Be(input_, annotation.dataAcquisition.polarization)) {
+        return false;
+    }
+    annotation.dataAcquisition.hddrFileName = readFixedString(input_, 40);
+    if (!input_) return false;
+    std::vector<std::uint8_t> dataAcqSpare(88);
+    if (!readBytes(input_, dataAcqSpare.data(), dataAcqSpare.size())) return false;
+
+    if (!readU32Be(input_, annotation.seaspotTarget.tgtSelect) ||
+        !readI32Be(input_, annotation.seaspotTarget.trackId) ||
+        !readI32Be(input_, annotation.seaspotTarget.useCounter) ||
+        !readU32Be(input_, annotation.seaspotTarget.tgtVelocity) ||
+        !readF64Be(input_, annotation.seaspotTarget.tgtLatitude) ||
+        !readF64Be(input_, annotation.seaspotTarget.tgtLongitude) ||
+        !readF32Be(input_, annotation.seaspotTarget.tgtSpeed) ||
+        !readF32Be(input_, annotation.seaspotTarget.tgtCourse) ||
+        !readF32Be(input_, annotation.seaspotTarget.tgtElevation)) {
+        return false;
+    }
+    std::uint8_t seaReserved[4] = {};
+    if (!readBytes(input_, seaReserved, sizeof(seaReserved))) return false;
+
+    if (!readU32Be(input_, annotation.landspotTarget.tgtSelect) ||
+        !readU32Be(input_, annotation.landspotTarget.trackId) ||
+        !readU32Be(input_, annotation.landspotTarget.useCounter) ||
+        !readF32Be(input_, annotation.landspotTarget.tgtElevation) ||
+        !readF64Be(input_, annotation.landspotTarget.tgtLatitude) ||
+        !readF64Be(input_, annotation.landspotTarget.tgtLongitude)) {
+        return false;
+    }
+
+    if (!readU32Be(input_, annotation.stripmapTarget.tgtSelect) ||
+        !readF32Be(input_, annotation.stripmapTarget.tgtElevation) ||
+        !readF64Be(input_, annotation.stripmapTarget.tgtLatitude) ||
+        !readF64Be(input_, annotation.stripmapTarget.tgtLongitude) ||
+        !readF64Be(input_, annotation.stripmapTarget.tgt2Latitude) ||
+        !readF64Be(input_, annotation.stripmapTarget.tgt2Longitude)) {
+        return false;
+    }
+
     input_.seekg(static_cast<std::streamoff>(annotationPayloadStart + RpfConstants::kAnnotationHeaderSize +
                                              RpfConstants::kProcImgFileIdSize +
                                              RpfConstants::kImgDisplayParamSize +
                                              RpfConstants::kDataAcqInfoSize +
                                              RpfConstants::kSeaspotTargetSize +
                                              RpfConstants::kLandspotTargetSize +
-                                             RpfConstants::kStripmapTargetSize +
-                                             RpfConstants::kProcInParamSize),
+                                             RpfConstants::kStripmapTargetSize),
                  std::ios::beg);
 
-    const auto dataProcStart = static_cast<std::uint32_t>(input_.tellg());
-    input_.seekg(static_cast<std::streamoff>(dataProcStart +
-                                             RpfConstants::kDataProcOutputSize -
-                                             RpfConstants::kDataProcOutputTailSize),
-                 std::ios::beg);
+    annotation.procInParams.bytes.resize(RpfConstants::kProcInParamSize);
+    input_.read(reinterpret_cast<char*>(annotation.procInParams.bytes.data()),
+                static_cast<std::streamsize>(annotation.procInParams.bytes.size()));
+    if (!input_) return false;
 
-    for (int i = 0; i < 8; ++i) {
-        std::uint32_t hi = 0;
-        std::uint32_t lo = 0;
-        if (!readU32Be(input_, hi) || !readU32Be(input_, lo)) return false;
+    annotation.dataProcOutput.bytes.resize(RpfConstants::kDataProcOutputSize);
+    input_.read(reinterpret_cast<char*>(annotation.dataProcOutput.bytes.data()),
+                static_cast<std::streamsize>(annotation.dataProcOutput.bytes.size()));
+    if (!input_) return false;
+
+    const std::size_t tailOffset =
+        RpfConstants::kDataProcOutputSize - RpfConstants::kDataProcOutputTailSize + 64u;
+    if (annotation.dataProcOutput.bytes.size() >= tailOffset + 4u) {
+        std::uint32_t gridLinesRaw = 0;
+        std::memcpy(&gridLinesRaw,
+                    annotation.dataProcOutput.bytes.data() + tailOffset,
+                    sizeof(gridLinesRaw));
+        gridLinesRaw = (gridLinesRaw >> 24) |
+                       ((gridLinesRaw >> 8) & 0x0000FF00) |
+                       ((gridLinesRaw << 8) & 0x00FF0000) |
+                       (gridLinesRaw << 24);
+        annotation.latLongOutput.geolocationGridNumLines =
+            static_cast<std::uint16_t>(gridLinesRaw);
     }
 
-    std::int32_t gridLines = 0;
-    if (!readI32Be(input_, gridLines)) return false;
-    annotation.latLongOutput.geolocationGridNumLines =
-        static_cast<std::uint16_t>(gridLines);
+    if (!readF32Be(input_, annotation.ownAircraftInfo.acHeading) ||
+        !readF32Be(input_, annotation.ownAircraftInfo.acSpeed) ||
+        !readF64Be(input_, annotation.ownAircraftInfo.acLatitude) ||
+        !readF64Be(input_, annotation.ownAircraftInfo.acLongitude) ||
+        !readF64Be(input_, annotation.ownAircraftInfo.acAltitude)) {
+        return false;
+    }
+    std::vector<std::uint8_t> ownAircraftSpare(32);
+    if (!readBytes(input_, ownAircraftSpare.data(), ownAircraftSpare.size())) return false;
+
+    annotation.procIdParams.bytes.resize(RpfConstants::kProcIdParamSize);
+    input_.read(reinterpret_cast<char*>(annotation.procIdParams.bytes.data()),
+                static_cast<std::streamsize>(annotation.procIdParams.bytes.size()));
+    if (!input_) return false;
 
     annotation.notes.summary =
         "fileType=" + std::to_string(fileType) +

@@ -5,6 +5,7 @@
 
 #include <Eigen/Core>
 
+#include "rpf/AnnotationStruct.hpp"
 #include "rpf/LatLongGrid.hpp"
 
 namespace rpf {
@@ -23,6 +24,16 @@ struct RpfWriteOptions {
     std::uint32_t startLine = 1;
     std::uint32_t startPixel = 1;
     std::string fileId;
+    std::string formatVersion;
+    DataAcquisitionInfo dataAcquisition{};
+    SeaspotTarget seaspotTarget{};
+    LandspotTarget landspotTarget{};
+    StripmapTarget stripmapTarget{};
+    OwnAircraftInfo ownAircraftInfo{};
+    RawAnnotationBlock imgDisplayParams{};
+    RawAnnotationBlock procInParams{};
+    RawAnnotationBlock dataProcOutput{};
+    RawAnnotationBlock procIdParams{};
 };
 
 bool writeRpfFile(const std::string& path,

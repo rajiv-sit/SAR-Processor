@@ -91,6 +91,22 @@ void writeF64Be(std::ofstream& output, double value) {
     output.write(reinterpret_cast<const char*>(buf), 8);
 }
 
+void writeUtcDateTime(std::ofstream& output, const rpf::UtcDateTime& utc) {
+    const std::uint16_t yearMonth =
+        static_cast<std::uint16_t>(((utc.year & 0x0FFF) << 4) | (utc.month & 0x000F));
+    const std::uint16_t dayHourMin =
+        static_cast<std::uint16_t>(((utc.day & 0x1F) << 11) |
+                                   ((utc.hour & 0x1F) << 6) |
+                                   (utc.minute & 0x3F));
+    const std::uint16_t secMsec =
+        static_cast<std::uint16_t>(((utc.second & 0x3F) << 10) |
+                                   (utc.millisec & 0x03FF));
+    writeU16Be(output, yearMonth);
+    writeU16Be(output, dayHourMin);
+    writeU16Be(output, secMsec);
+    writeU16Be(output, 0);
+}
+
 void writeZeros(std::ofstream& output, std::size_t count) {
     static constexpr std::size_t kChunk = 256;
     const std::uint8_t zero[kChunk] = {};
@@ -293,35 +309,100 @@ bool writeRpfFile(const std::string& path,
 
     writeI32Be(output, options.fileType);
     writeI32Be(output, options.radarMode);
-    writeFixedString(output, options.fileId, RpfConstants::kProcImgFileIdSize - 8);
+    writeFixedString(output, options.formatVersion, 16);
+    writeFixedString(output, options.fileId, RpfConstants::kProcImgFileIdSize - 8 - 16);
     written += RpfConstants::kProcImgFileIdSize;
 
-    writeZeros(output, RpfConstants::kImgDisplayParamSize);
+    if (options.imgDisplayParams.bytes.size() == RpfConstants::kImgDisplayParamSize) {
+        output.write(reinterpret_cast<const char*>(options.imgDisplayParams.bytes.data()),
+                     static_cast<std::streamsize>(options.imgDisplayParams.bytes.size()));
+    } else {
+        writeZeros(output, RpfConstants::kImgDisplayParamSize);
+    }
     written += RpfConstants::kImgDisplayParamSize;
-    writeI32Be(output, static_cast<std::int32_t>(options.startLine));
-    writeI32Be(output, static_cast<std::int32_t>(options.startPixel));
-    writeI32Be(output, static_cast<std::int32_t>(height));
-    writeI32Be(output, static_cast<std::int32_t>(width));
-    writeZeros(output, RpfConstants::kDataAcqInfoSize - 16);
+    writeFixedString(output, options.dataAcquisition.aircraftId, 6);
+    writeZeros(output, 2);
+    writeFixedString(output, options.dataAcquisition.sortieNumber, 8);
+    writeUtcDateTime(output, options.dataAcquisition.currentMissionStartTime);
+    writeUtcDateTime(output, options.dataAcquisition.rawDataMissionStartTime);
+    writeI32Be(output, options.dataAcquisition.currentAcqId);
+    writeI32Be(output, options.dataAcquisition.rawDataAcqId);
+    writeUtcDateTime(output, options.dataAcquisition.currentAcqStartTime);
+    writeUtcDateTime(output, options.dataAcquisition.rawDataAcqStartTime);
+    writeU32Be(output, options.dataAcquisition.resolution);
+    writeU32Be(output, options.dataAcquisition.polarization);
+    writeFixedString(output, options.dataAcquisition.hddrFileName, 40);
+    writeZeros(output, 88);
     written += RpfConstants::kDataAcqInfoSize;
-    writeZeros(output, RpfConstants::kSeaspotTargetSize);
+    writeU32Be(output, options.seaspotTarget.tgtSelect);
+    writeI32Be(output, options.seaspotTarget.trackId);
+    writeI32Be(output, options.seaspotTarget.useCounter);
+    writeU32Be(output, options.seaspotTarget.tgtVelocity);
+    writeF64Be(output, options.seaspotTarget.tgtLatitude);
+    writeF64Be(output, options.seaspotTarget.tgtLongitude);
+    writeF32Be(output, options.seaspotTarget.tgtSpeed);
+    writeF32Be(output, options.seaspotTarget.tgtCourse);
+    writeF32Be(output, options.seaspotTarget.tgtElevation);
+    writeZeros(output, 4);
     written += RpfConstants::kSeaspotTargetSize;
-    writeZeros(output, RpfConstants::kLandspotTargetSize);
+    writeU32Be(output, options.landspotTarget.tgtSelect);
+    writeU32Be(output, options.landspotTarget.trackId);
+    writeU32Be(output, options.landspotTarget.useCounter);
+    writeF32Be(output, options.landspotTarget.tgtElevation);
+    writeF64Be(output, options.landspotTarget.tgtLatitude);
+    writeF64Be(output, options.landspotTarget.tgtLongitude);
     written += RpfConstants::kLandspotTargetSize;
-    writeZeros(output, RpfConstants::kStripmapTargetSize);
+    writeU32Be(output, options.stripmapTarget.tgtSelect);
+    writeF32Be(output, options.stripmapTarget.tgtElevation);
+    writeF64Be(output, options.stripmapTarget.tgtLatitude);
+    writeF64Be(output, options.stripmapTarget.tgtLongitude);
+    writeF64Be(output, options.stripmapTarget.tgt2Latitude);
+    writeF64Be(output, options.stripmapTarget.tgt2Longitude);
     written += RpfConstants::kStripmapTargetSize;
-    writeZeros(output, RpfConstants::kProcInParamSize);
+    if (options.procInParams.bytes.size() == RpfConstants::kProcInParamSize) {
+        output.write(reinterpret_cast<const char*>(options.procInParams.bytes.data()),
+                     static_cast<std::streamsize>(options.procInParams.bytes.size()));
+    } else {
+        writeZeros(output, RpfConstants::kProcInParamSize);
+    }
     written += RpfConstants::kProcInParamSize;
 
-    writeZeros(output, RpfConstants::kDataProcOutputSize - RpfConstants::kDataProcOutputTailSize);
-    for (int i = 0; i < 8; ++i) {
-        writeU32Be(output, 0);
-        writeU32Be(output, 0);
+    if (options.dataProcOutput.bytes.size() == RpfConstants::kDataProcOutputSize) {
+        output.write(reinterpret_cast<const char*>(options.dataProcOutput.bytes.data()),
+                     static_cast<std::streamsize>(options.dataProcOutput.bytes.size()));
+    } else {
+        writeZeros(output, RpfConstants::kDataProcOutputSize - RpfConstants::kDataProcOutputTailSize);
+        for (int i = 0; i < 8; ++i) {
+            writeU32Be(output, 0);
+            writeU32Be(output, 0);
+        }
+        writeI32Be(output, options.geolocationGridNumLines);
+        writeZeros(output, RpfConstants::kDataProcOutputTailSize - 64 - 4);
     }
-    writeI32Be(output, options.geolocationGridNumLines);
-    written += RpfConstants::kDataProcOutputSize - RpfConstants::kDataProcOutputTailSize;
-    written += 8u * 8u;
-    written += 4u;
+    written += RpfConstants::kDataProcOutputSize;
+
+    writeF32Be(output, options.ownAircraftInfo.acHeading);
+    writeF32Be(output, options.ownAircraftInfo.acSpeed);
+    writeF64Be(output, options.ownAircraftInfo.acLatitude);
+    writeF64Be(output, options.ownAircraftInfo.acLongitude);
+    writeF64Be(output, options.ownAircraftInfo.acAltitude);
+    writeZeros(output, 32);
+    written += RpfConstants::kOwnAircraftInfoSize;
+
+    if (options.procIdParams.bytes.size() == RpfConstants::kProcIdParamSize) {
+        output.write(reinterpret_cast<const char*>(options.procIdParams.bytes.data()),
+                     static_cast<std::streamsize>(options.procIdParams.bytes.size()));
+    } else {
+        writeZeros(output, RpfConstants::kProcIdParamSize);
+    }
+    written += RpfConstants::kProcIdParamSize;
+
+    if (written > fixedAnnotationBytes) return setError(error, "RPF writer overflowed annotation block.");
+    if (fixedAnnotationBytes > written) {
+        writeZeros(output, fixedAnnotationBytes - written);
+    }
+    const auto annotationChunkEnd = output.tellp();
+    if (!finalizeChunkHeader(output, annotationChunkStart, annotationChunkEnd)) return setError(error, "Failed to finalize annotation chunk header.");
 
     const std::uint16_t gridLines = options.geolocationGridNumLines;
     for (std::uint16_t i = 0; i < gridLines; ++i) {
@@ -362,15 +443,7 @@ bool writeRpfFile(const std::string& path,
         writeF64Be(output, midLon);
         writeF64Be(output, endLat);
         writeF64Be(output, endLon);
-        written += 64u;
     }
-
-    if (written > fixedAnnotationBytes) return setError(error, "RPF writer overflowed annotation block.");
-    if (fixedAnnotationBytes > written) {
-        writeZeros(output, fixedAnnotationBytes - written);
-    }
-    const auto annotationChunkEnd = output.tellp();
-    if (!finalizeChunkHeader(output, annotationChunkStart, annotationChunkEnd)) return setError(error, "Failed to finalize annotation chunk header.");
 
     if (!writeChunkHeader(output, RpfConstants::kEndOfFileChunkTag, 0)) return setError(error, "Failed to write end-of-file chunk.");
 

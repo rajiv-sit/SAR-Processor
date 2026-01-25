@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 
 #include "sar/SarTapeConstants.hpp"
@@ -45,6 +46,66 @@ bool readU32Be(std::ifstream& input, std::uint32_t& value) {
             (static_cast<std::uint32_t>(buf[2]) << 8) |
             static_cast<std::uint32_t>(buf[3]);
     return true;
+}
+
+std::string sliceToString(const std::vector<std::uint8_t>& buffer,
+                           std::size_t offset,
+                           std::size_t length) {
+    if (offset + length > buffer.size()) {
+        return {};
+    }
+    return std::string(reinterpret_cast<const char*>(buffer.data() + offset), length);
+}
+
+bool parseAccessoryRecord(const std::vector<std::uint8_t>& buffer,
+                          std::vector<SarTargetPositionMessage>& messages) {
+    const std::size_t start =
+        std::min<std::size_t>(SarTapeConstants::kTargetPosDataStart, buffer.size());
+    const std::size_t end =
+        std::min<std::size_t>(SarTapeConstants::kTargetPosDataEnd, buffer.size());
+    if (start >= end || end - start < SarTapeConstants::kTargetPosMsgSize) {
+        return false;
+    }
+
+    for (std::size_t pos = start; pos + SarTapeConstants::kTargetPosMsgSize <= end; ++pos) {
+        if (buffer[pos] != static_cast<std::uint8_t>('T') ||
+            buffer[pos + 1] != static_cast<std::uint8_t>('R')) {
+            continue;
+        }
+
+        const std::size_t rangeOffset = pos + 2;
+        const std::size_t timeOffset = rangeOffset + 6;
+        const std::size_t lonOffset = timeOffset + 8;
+        const std::size_t latOffset = lonOffset + 9;
+        const std::size_t endOffset = latOffset + 8;
+        if (endOffset + 2 > buffer.size()) {
+            break;
+        }
+
+        const std::uint8_t end1 = buffer[endOffset];
+        const std::uint8_t end2 = buffer[endOffset + 1];
+        if (!((end1 == 10 && end2 == 13) || (end1 == 13 && end2 == 10))) {
+            continue;
+        }
+
+        SarTargetPositionMessage msg{};
+        const std::string rangeStr = sliceToString(buffer, rangeOffset, 6);
+        const std::string timeStr = sliceToString(buffer, timeOffset, 8);
+        msg.targetLong = sliceToString(buffer, lonOffset, 9);
+        msg.targetLat = sliceToString(buffer, latOffset, 8);
+
+        if (!rangeStr.empty()) {
+            msg.targetRange = std::strtod(rangeStr.c_str(), nullptr);
+        }
+        if (!timeStr.empty()) {
+            msg.timeStamp = static_cast<std::uint32_t>(std::strtoul(timeStr.c_str(), nullptr, 16));
+        }
+
+        messages.push_back(std::move(msg));
+        pos += SarTapeConstants::kTargetPosMsgSize - 1;
+    }
+
+    return !messages.empty();
 }
 
 std::int16_t readStrangeShort(std::ifstream& input, bool byte1Signed, bool byte2Signed) {
@@ -182,8 +243,62 @@ const SarSceneHeader& SarTapeReader::sceneHeader() const {
     return sceneHeader_;
 }
 
+bool SarTapeReader::hasAccessoryRecord() const {
+    return hasAccessoryRecord_;
+}
+
+const std::vector<SarTargetPositionMessage>& SarTapeReader::targetPositionMessages() const {
+    return targetPositionMessages_;
+}
+
+bool SarTapeReader::ensureAccessoryParsed() {
+    if (accessoryParsed_) {
+        return true;
+    }
+    accessoryParsed_ = true;
+    if (!input_.is_open()) {
+        return false;
+    }
+
+    input_.clear();
+    input_.seekg(0, std::ios::beg);
+    std::uint32_t firstWord = 0;
+    if (!readU32Be(input_, firstWord)) {
+        return false;
+    }
+
+    if (firstWord == SarTapeConstants::kSyncWord) {
+        input_.clear();
+        input_.seekg(0, std::ios::beg);
+        return true;
+    }
+
+    input_.clear();
+    input_.seekg(0, std::ios::beg);
+
+    std::vector<std::uint8_t> buffer(SarTapeConstants::kAccessoryRecordSize);
+    input_.read(reinterpret_cast<char*>(buffer.data()),
+                static_cast<std::streamsize>(buffer.size()));
+    const std::size_t bytesRead = static_cast<std::size_t>(input_.gcount());
+    buffer.resize(bytesRead);
+    hasAccessoryRecord_ = bytesRead >= SarTapeConstants::kTargetPosDataStart;
+    if (hasAccessoryRecord_) {
+        parseAccessoryRecord(buffer, targetPositionMessages_);
+    }
+
+    input_.clear();
+    const std::streamoff targetOffset =
+        static_cast<std::streamoff>(std::min<std::size_t>(bytesRead,
+                                                          SarTapeConstants::kAccessoryRecordSize));
+    input_.seekg(targetOffset, std::ios::beg);
+    return true;
+}
+
 bool SarTapeReader::readRecord(SarTraceRecord& record) {
     if (!input_.is_open() || input_.eof()) {
+        return false;
+    }
+    if (!ensureAccessoryParsed()) {
         return false;
     }
 

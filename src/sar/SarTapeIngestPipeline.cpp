@@ -105,6 +105,24 @@ nlohmann::json toJson(const SarSceneParams& params) {
     };
 }
 
+nlohmann::json toJson(const SarTargetPositionMessage& msg) {
+    return {
+        {"targetRange", msg.targetRange},
+        {"timeStamp", msg.timeStamp},
+        {"targetLong", msg.targetLong},
+        {"targetLat", msg.targetLat}
+    };
+}
+
+nlohmann::json toJson(const std::vector<SarTargetPositionMessage>& messages) {
+    nlohmann::json output = nlohmann::json::array();
+    output.reserve(messages.size());
+    for (const auto& msg : messages) {
+        output.push_back(toJson(msg));
+    }
+    return output;
+}
+
 void writeComplexIq(std::ofstream& datOut,
                     const std::int8_t* iqBytes,
                     std::size_t iqCount) {
@@ -209,7 +227,12 @@ std::uint32_t SarTapeIngestPipeline::run() {
                                                             linesWritten,
                                                             options_.outputComplexIq);
 
-        hdrOut << toJson(sceneHeader).dump(2) << '\n';
+        auto headerJson = toJson(sceneHeader);
+        if (reader.hasAccessoryRecord()) {
+            headerJson["targetPositionMessages"] =
+                toJson(reader.targetPositionMessages());
+        }
+        hdrOut << headerJson.dump(2) << '\n';
         sspOut << toJson(sceneParams).dump(2) << '\n';
     }
 
