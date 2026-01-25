@@ -93,6 +93,13 @@ Optional: pass a JSON file with input parameters (CPI, BW, PRF, sampling rate) f
 py .\visualizer\pyqt_rto_viewer.py 5000 C:\path\to\params.json
 ```
 
+## Visualizer:
+- Simulated:
+<img width="1091" height="832" alt="image" src="https://github.com/user-attachments/assets/8e4fc59f-fb62-4e2e-8561-01024858b785" />
+
+- Real:
+  <img width="605" height="730" alt="image" src="https://github.com/user-attachments/assets/719af42c-e982-4ef7-8067-2ad6ecf3b6f2" />
+
 ## Configuration
 Back-projection uses JSON config files in `configs/backproj/`.
 - `operator.json`: image dimensions, file naming, and output options.
