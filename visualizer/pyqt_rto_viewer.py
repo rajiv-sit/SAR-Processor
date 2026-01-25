@@ -148,19 +148,8 @@ class PyQtRtoViewer(QtWidgets.QWidget):
             return QtGui.QColor(30, 30, 30)
         t = (value - min_val) / (max_val - min_val)
         t = max(0.0, min(1.0, t))
-        if t < 0.33:
-            r = 0
-            g = int(255 * (t / 0.33))
-            b = 180
-        elif t < 0.66:
-            r = int(255 * ((t - 0.33) / 0.33))
-            g = 255
-            b = int(180 * (1 - (t - 0.33) / 0.33))
-        else:
-            r = 255
-            g = int(255 * (1 - (t - 0.66) / 0.34))
-            b = 0
-        return QtGui.QColor(r, g, b)
+        gray = int(255 * t)
+        return QtGui.QColor(gray, gray, gray)
 
     def _update_scale(self, min_val: float, max_val: float):
         height = 256
