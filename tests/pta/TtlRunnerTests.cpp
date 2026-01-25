@@ -21,12 +21,19 @@ std::filesystem::path makeTempPath(const std::string& stem) {
 TEST(TtlRunnerTests, ParsesPrsConfig) {
     const auto configPath = makeTempPath("ttl_config");
     const auto reportPath = makeTempPath("pta_report.txt");
+    const auto chipPath = makeTempPath("pta_chip.txt");
+    std::ofstream chipOut(chipPath);
+    ASSERT_TRUE(chipOut);
+    chipOut << "0 1 0 2 0\n";
+    chipOut.close();
     std::ofstream output(configPath);
     ASSERT_TRUE(output);
     output << "# comment\n";
     output << "invalid_line\n";
     output << "reportPath=" << reportPath.string() << "\n";
     output << "reportFormat=text\n";
+    output << "chipPath=" << chipPath.string() << "\n";
+    output << "maxPeaks=2\n";
     output.close();
 
     pta::TtlRunner runner;
@@ -39,6 +46,7 @@ TEST(TtlRunnerTests, ParsesPrsConfig) {
                         std::istreambuf_iterator<char>());
     EXPECT_NE(content.find("inputConfig="), std::string::npos);
     EXPECT_NE(content.find("reportFormat=text"), std::string::npos);
+    EXPECT_NE(content.find("status=ok"), std::string::npos);
 }
 
 TEST(TtlRunnerTests, FailsWhenConfigMissing) {
@@ -53,6 +61,7 @@ TEST(TtlRunnerTests, WritesJsonReport) {
     ASSERT_TRUE(output);
     output << "reportPath=" << reportPath.string() << "\n";
     output << "reportFormat=json\n";
+    output << "chipData=0,1,0,2,0\n";
     output.close();
 
     pta::TtlRunner runner;
@@ -64,6 +73,7 @@ TEST(TtlRunnerTests, WritesJsonReport) {
     input >> payload;
     EXPECT_EQ(payload.value("reportFormat", ""), "json");
     EXPECT_EQ(payload.value("inputConfig", ""), configPath.string());
+    EXPECT_EQ(payload.value("status", ""), "ok");
 }
 
 TEST(TtlRunnerTests, ParsesJsonConfig) {
@@ -73,7 +83,8 @@ TEST(TtlRunnerTests, ParsesJsonConfig) {
     ASSERT_TRUE(output);
     output << "{\n";
     output << "  \"reportPath\": \"" << reportPath.generic_string() << "\",\n";
-    output << "  \"reportFormat\": \"json\"\n";
+    output << "  \"reportFormat\": \"json\",\n";
+    output << "  \"chipData\": [0, 1, 0, 2, 0]\n";
     output << "}\n";
     output.close();
 
@@ -85,6 +96,7 @@ TEST(TtlRunnerTests, ParsesJsonConfig) {
     nlohmann::json payload;
     input >> payload;
     EXPECT_EQ(payload.value("reportFormat", ""), "json");
+    EXPECT_EQ(payload.value("status", ""), "ok");
 }
 
 TEST(TtlRunnerTests, FallsBackToTextForUnknownFormat) {
@@ -94,7 +106,8 @@ TEST(TtlRunnerTests, FallsBackToTextForUnknownFormat) {
     ASSERT_TRUE(output);
     output << "{\n";
     output << "  \"reportPath\": \"" << reportPath.generic_string() << "\",\n";
-    output << "  \"reportFormat\": \"unknown\"\n";
+    output << "  \"reportFormat\": \"unknown\",\n";
+    output << "  \"chipData\": [0, 1, 0, 2, 0]\n";
     output << "}\n";
     output.close();
 
@@ -106,6 +119,7 @@ TEST(TtlRunnerTests, FallsBackToTextForUnknownFormat) {
     std::string content((std::istreambuf_iterator<char>(input)),
                         std::istreambuf_iterator<char>());
     EXPECT_NE(content.find("reportFormat=text"), std::string::npos);
+    EXPECT_NE(content.find("status=ok"), std::string::npos);
 }
 
 TEST(TtlRunnerTests, FailsWhenReportPathInvalid) {

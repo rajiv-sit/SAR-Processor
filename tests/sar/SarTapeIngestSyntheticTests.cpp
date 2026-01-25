@@ -1,9 +1,11 @@
 #include <chrono>
+#include <complex>
 #include <filesystem>
 #include <string>
 
 #include <gtest/gtest.h>
 
+#include "sar/SarTapeConstants.hpp"
 #include "sar/SarTapeIngestPipeline.hpp"
 #include "sartape2/SarTape2Generator.hpp"
 
@@ -51,4 +53,33 @@ TEST(SarTapeIngestSyntheticTests, IngestsGeneratedRecords) {
     EXPECT_TRUE(std::filesystem::exists(outputPrefix.string() + ".vts"));
     EXPECT_TRUE(std::filesystem::exists(outputPrefix.string() + ".hdr"));
     EXPECT_TRUE(std::filesystem::exists(outputPrefix.string() + ".ssp"));
+}
+
+TEST(SarTapeIngestSyntheticTests, WritesComplexIqWhenEnabled) {
+    sartape2::GeneratorConfig config{};
+    config.numPulses = 5;
+    sartape2::SarTape2Generator generator(config);
+
+    const auto inputPath = makeTempPath("sartape2_ingest_complex", ".bin");
+    ASSERT_TRUE(generator.generateSarTapeRecords(inputPath.string()));
+
+    const auto outputPrefix = makeTempPath("sartape2_complex_out", "");
+    sar::IngestOptions options{};
+    options.errorPolicy = sar::ErrorPolicy::kBestEffort;
+    options.outputComplexIq = true;
+    sar::SarTapeIngestPipeline pipeline(inputPath.string(), outputPrefix.string(), options);
+    const std::uint32_t linesWritten = pipeline.run();
+    ASSERT_GT(linesWritten, 0u);
+
+    const auto datPath = outputPrefix.string() + ".dat";
+    ASSERT_TRUE(std::filesystem::exists(datPath));
+
+    const std::uint64_t datSize = std::filesystem::file_size(datPath);
+    const std::uint64_t iqBytes = sar::SarTapeConstants::kRecordSize -
+                                  sar::SarTapeConstants::kRecordHeaderSize -
+                                  sar::SarTapeConstants::kTestRampSize;
+    const std::uint64_t expected =
+        static_cast<std::uint64_t>(linesWritten) *
+        (iqBytes / 2) * sizeof(std::complex<float>);
+    EXPECT_EQ(datSize, expected);
 }

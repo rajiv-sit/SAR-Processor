@@ -26,12 +26,17 @@ bool writeRpfFromSarTape(const std::string& sarTapePath,
     std::size_t width = 0;
 
     SarTraceRecord record;
+    const std::size_t iqOffset = SarTapeConstants::kRecordHeaderSize;
+    const std::size_t iqBytes =
+        SarTapeConstants::kRecordSize -
+        SarTapeConstants::kRecordHeaderSize -
+        SarTapeConstants::kTestRampSize;
     while (reader.readRecord(record)) {
         if (record.header.recordType != SarTapeConstants::kRecordTypeData) {
             continue;
         }
 
-        const std::size_t samples = record.iqBytes.size() / 2;
+        const std::size_t samples = iqBytes / 2;
         if (samples == 0) continue;
 
         if (width == 0) {
@@ -41,8 +46,9 @@ bool writeRpfFromSarTape(const std::string& sarTapePath,
         std::vector<float> line(width, 0.0f);
         const std::size_t maxSamples = std::min(width, samples);
         for (std::size_t i = 0; i < maxSamples; ++i) {
-            const float iVal = static_cast<float>(record.iqBytes[2 * i]);
-            const float qVal = static_cast<float>(record.iqBytes[2 * i + 1]);
+            const std::size_t idx = iqOffset + 2 * i;
+            const float iVal = static_cast<float>(record.iqBytes[idx]);
+            const float qVal = static_cast<float>(record.iqBytes[idx + 1]);
             line[i] = std::sqrt(iVal * iVal + qVal * qVal);
         }
         lines.push_back(std::move(line));

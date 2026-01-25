@@ -127,3 +127,16 @@ TEST(PtaAnalyzerTests, FindPeaksSkipsTooClosePeaks) {
     ASSERT_EQ(peaks.size(), 1u);
     EXPECT_EQ(peaks[0].index, 2u);
 }
+
+TEST(PtaAnalyzerTests, Analyze1DWithZoomUpsamples) {
+    pta::PtaChip chip;
+    chip.magFactor = 4;
+    chip.chipIn.resize(1, 4);
+    chip.chipIn << 0.0f, 1.0f, 0.0f, 0.5f;
+
+    pta::PtaAnalyzer analyzer;
+    const auto result = analyzer.analyze1DWithZoom(chip);
+    EXPECT_GT(result.zoomPower.size(), 4u);
+    EXPECT_GT(result.stats.maxPower, 0.0);
+    EXPECT_FALSE(result.peaks.empty());
+}

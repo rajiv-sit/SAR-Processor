@@ -32,7 +32,11 @@ SarSceneParams buildSceneParams(const SarSceneHeader& header,
     params.etaSc = header.targEtaSceCtr * (3.14159265358979323846 / 180.0);
     params.prf = (header.pri > 0) ? (1.0 / (header.pri * 1e-6)) : 0.0;
     params.numLines = numLines;
-    params.numRngSamp = static_cast<std::uint32_t>(SarTapeConstants::kRecordSize / 2);
+    const std::size_t iqBytes =
+        SarTapeConstants::kRecordSize -
+        SarTapeConstants::kRecordHeaderSize -
+        SarTapeConstants::kTestRampSize;
+    params.numRngSamp = static_cast<std::uint32_t>(iqBytes / 2);
     params.dataType = outputComplexIq ? "c" : "s";
     return params;
 }
@@ -101,8 +105,10 @@ nlohmann::json toJson(const SarSceneParams& params) {
     };
 }
 
-void writeComplexIq(std::ofstream& datOut, const std::vector<std::int8_t>& iqBytes) {
-    const std::size_t maxIndex = iqBytes.size() - (iqBytes.size() % 2);
+void writeComplexIq(std::ofstream& datOut,
+                    const std::int8_t* iqBytes,
+                    std::size_t iqCount) {
+    const std::size_t maxIndex = iqCount - (iqCount % 2);
     for (std::size_t i = 0; i < maxIndex; i += 2) {
         const std::complex<float> sample(static_cast<float>(iqBytes[i]),
                                          static_cast<float>(iqBytes[i + 1]));
@@ -157,6 +163,11 @@ std::uint32_t SarTapeIngestPipeline::run() {
     std::uint32_t linesWritten = 0;
     std::uint32_t expectedLines = 0;
     bool expectedLinesKnown = false;
+    const std::size_t iqOffset = SarTapeConstants::kRecordHeaderSize;
+    const std::size_t iqBytes =
+        SarTapeConstants::kRecordSize -
+        SarTapeConstants::kRecordHeaderSize -
+        SarTapeConstants::kTestRampSize;
 
     while (reader.readRecord(record)) {
         if (!record.header.syncValid) {
@@ -173,11 +184,16 @@ std::uint32_t SarTapeIngestPipeline::run() {
             expectedLinesKnown = true;
         }
 
+        if (record.header.recordType != SarTapeConstants::kRecordTypeData) {
+            continue;
+        }
+
+        const std::int8_t* iqPtr = record.iqBytes.data() + iqOffset;
         if (options_.outputComplexIq) {
-            writeComplexIq(datOut, record.iqBytes);
+            writeComplexIq(datOut, iqPtr, iqBytes);
         } else {
-            datOut.write(reinterpret_cast<const char*>(record.iqBytes.data()),
-                         static_cast<std::streamsize>(record.iqBytes.size()));
+            datOut.write(reinterpret_cast<const char*>(iqPtr),
+                         static_cast<std::streamsize>(iqBytes));
         }
         vtsOut << record.header.timeStamp << '\n';
         ++linesWritten;
