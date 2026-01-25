@@ -33,5 +33,6 @@ md/
 tools/
 
 # Coverage
+coverage/
 coverage.xml
 LastCoverageResults.log
