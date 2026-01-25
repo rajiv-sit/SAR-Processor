@@ -101,6 +101,16 @@ void writeZeros(std::ofstream& output, std::size_t count) {
     }
 }
 
+void writeFixedString(std::ofstream& output, const std::string& value, std::size_t maxBytes) {
+    const std::size_t count = std::min(value.size(), maxBytes);
+    if (count > 0) {
+        output.write(value.data(), static_cast<std::streamsize>(count));
+    }
+    if (maxBytes > count) {
+        writeZeros(output, maxBytes - count);
+    }
+}
+
 std::size_t alignTo8(std::size_t size) {
     return (size + 7u) & ~static_cast<std::size_t>(7u);
 }
@@ -270,12 +280,16 @@ bool writeRpfFile(const std::string& path,
 
     writeI32Be(output, options.fileType);
     writeI32Be(output, options.radarMode);
-    writeZeros(output, RpfConstants::kProcImgFileIdSize - 8);
+    writeFixedString(output, options.fileId, RpfConstants::kProcImgFileIdSize - 8);
     written += RpfConstants::kProcImgFileIdSize;
 
     writeZeros(output, RpfConstants::kImgDisplayParamSize);
     written += RpfConstants::kImgDisplayParamSize;
-    writeZeros(output, RpfConstants::kDataAcqInfoSize);
+    writeI32Be(output, static_cast<std::int32_t>(options.startLine));
+    writeI32Be(output, static_cast<std::int32_t>(options.startPixel));
+    writeI32Be(output, static_cast<std::int32_t>(height));
+    writeI32Be(output, static_cast<std::int32_t>(width));
+    writeZeros(output, RpfConstants::kDataAcqInfoSize - 16);
     written += RpfConstants::kDataAcqInfoSize;
     writeZeros(output, RpfConstants::kSeaspotTargetSize);
     written += RpfConstants::kSeaspotTargetSize;
@@ -298,8 +312,10 @@ bool writeRpfFile(const std::string& path,
 
     const std::uint16_t gridLines = options.geolocationGridNumLines;
     for (std::uint16_t i = 0; i < gridLines; ++i) {
-        const std::int32_t lineNumber = 1 + static_cast<std::int32_t>(i) *
-                                              std::max<std::int32_t>(1, height / gridLines);
+        const std::int32_t lineNumber =
+            static_cast<std::int32_t>(options.startLine) +
+            static_cast<std::int32_t>(i) *
+                std::max<std::int32_t>(1, height / gridLines);
         writeI32Be(output, lineNumber);
         writeF32Be(output, 1.0f);
         writeF32Be(output, 1.0f);

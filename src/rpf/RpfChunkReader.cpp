@@ -1,8 +1,8 @@
 #include "rpf/RpfChunkReader.hpp"
 
 #include <array>
-
 #include <cstring>
+#include <string>
 #include <Eigen/Core>
 
 #include "rpf/RpfConstants.hpp"
@@ -154,8 +154,39 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
     if (!readI32Be(input_, fileType) || !readI32Be(input_, radarMode)) return false;
     annotation.fileIdParams.radarMode = static_cast<std::uint8_t>(radarMode);
     annotation.fileIdParams.fileType = fileType;
-    annotation.notes.summary =
-        "fileType=" + std::to_string(fileType) + " radarMode=" + std::to_string(radarMode);
+
+    std::string fileId;
+    fileId.resize(32, '\0');
+    input_.read(fileId.data(), static_cast<std::streamsize>(fileId.size()));
+    if (!input_) return false;
+    const auto endPos = fileId.find('\0');
+    if (endPos != std::string::npos) {
+        fileId.resize(endPos);
+    }
+    if (!fileId.empty()) {
+        annotation.fileName = fileId;
+    }
+
+    const auto dataAcqOffset =
+        annotationPayloadStart + RpfConstants::kAnnotationHeaderSize +
+        RpfConstants::kProcImgFileIdSize + RpfConstants::kImgDisplayParamSize;
+    input_.seekg(static_cast<std::streamoff>(dataAcqOffset), std::ios::beg);
+    std::int32_t startLine = 0;
+    std::int32_t startPixel = 0;
+    std::int32_t numLines = 0;
+    std::int32_t numPixels = 0;
+    if (!readI32Be(input_, startLine) || !readI32Be(input_, startPixel) ||
+        !readI32Be(input_, numLines) || !readI32Be(input_, numPixels)) {
+        return false;
+    }
+    if (startLine > 0 && startPixel > 0 && numLines > 0 && numPixels > 0 &&
+        static_cast<std::uint32_t>(numLines) <= annotation.imageDataChunkHeader.dataHeight &&
+        static_cast<std::uint32_t>(numPixels) <= annotation.imageDataChunkHeader.dataWidth) {
+        annotation.imageRect.startLine = static_cast<std::uint32_t>(startLine);
+        annotation.imageRect.startPixel = static_cast<std::uint32_t>(startPixel);
+        annotation.imageRect.numLines = static_cast<std::uint32_t>(numLines);
+        annotation.imageRect.numPixels = static_cast<std::uint32_t>(numPixels);
+    }
 
     input_.seekg(static_cast<std::streamoff>(annotationPayloadStart + RpfConstants::kAnnotationHeaderSize +
                                              RpfConstants::kProcImgFileIdSize +
@@ -183,6 +214,11 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
     if (!readI32Be(input_, gridLines)) return false;
     annotation.latLongOutput.geolocationGridNumLines =
         static_cast<std::uint16_t>(gridLines);
+
+    annotation.notes.summary =
+        "fileType=" + std::to_string(fileType) +
+        " radarMode=" + std::to_string(radarMode) +
+        " gridLines=" + std::to_string(annotation.latLongOutput.geolocationGridNumLines);
 
     nextOffset = annotationPayloadStart +
                  RpfConstants::kAnnotationHeaderSize +

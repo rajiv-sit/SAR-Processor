@@ -1,9 +1,12 @@
 #include "rpf/RpfQuery.hpp"
 
+#include <algorithm>
 #include <array>
 #include <fstream>
+#include <vector>
 
 #include "rpf/RpfConstants.hpp"
+#include "rpf/RpfFileUtils.hpp"
 
 namespace rpf {
 
@@ -148,6 +151,48 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
     }
 
     return true;
+}
+
+bool queryRpfAcquisition(const std::string& fileName,
+                         int frameOrLine,
+                         RpfAcquisitionMatch& match,
+                         std::string* error) {
+    const std::string baseName = getBaseFileName(fileName);
+    std::vector<std::string> files = findFiles(baseName);
+    if (files.empty()) {
+        files.push_back(fileName);
+    }
+
+    for (const auto& path : files) {
+        RpfQueryResult query{};
+        if (!queryRpfFile(path, query) || query.startNums.empty()) {
+            continue;
+        }
+
+        const bool isStripmap = (query.mode == RpfConstants::kStripmapMode);
+        const int target = (frameOrLine <= 0) ? query.startNums.front() : frameOrLine;
+        for (std::size_t i = 0; i < query.startNums.size(); ++i) {
+            const int start = query.startNums[i];
+            const int end = start + query.numLines[i] - 1;
+            const bool matches = isStripmap ? (target >= start && target <= end) : (target == start);
+            if (!matches) {
+                continue;
+            }
+            match.path = path;
+            match.mode = query.mode;
+            match.startNum = start;
+            match.numLines = query.numLines[i];
+            match.numPixels = query.numPixels[i];
+            match.pixelType = query.pixelTypes[i];
+            match.bofImgOffset = query.bofImgOffsets[i];
+            return true;
+        }
+    }
+
+    if (error) {
+        *error = "No matching acquisition found.";
+    }
+    return false;
 }
 
 }  // namespace rpf

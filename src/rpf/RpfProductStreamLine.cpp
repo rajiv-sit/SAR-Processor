@@ -191,58 +191,51 @@ bool RpfProductStreamLine::init(const std::string& fileName,
     stream.blocks_.clear();
     stream.latLongGrid_ = {};
 
-    RpfQueryResult query{};
-    if (!queryRpfFile(fileName, query) || query.startNums.empty()) {
-        error = "Failed to query file";
+    if (frameNum <= 0) {
+        frameNum = 1;
+    }
+
+    RpfAcquisitionMatch match{};
+    if (!queryRpfAcquisition(fileName, frameNum, match, &error)) {
         return false;
     }
 
-    const bool isStripmap = (query.mode == RpfConstants::kStripmapMode);
-    const std::string baseName = getBaseFileName(fileName);
-    std::vector<std::string> files;
+    const bool isStripmap = (match.mode == RpfConstants::kStripmapMode);
     if (isStripmap) {
-        files = findFiles(baseName);
+        const std::string baseName = getBaseFileName(match.path);
+        const auto files = findFiles(baseName);
         if (files.empty()) {
             error = "No files found for stripmap acquisition";
             return false;
         }
-    }
-    if (!isStripmap) {
-        files = {fileName};
-        if (frameNum <= 0) {
-            frameNum = 1;
-        }
-    }
-
-    bool foundFrame = isStripmap;
-    for (const auto& path : files) {
-        RpfQueryResult fileQuery{};
-        if (!queryRpfFile(path, fileQuery)) continue;
-
-        for (std::size_t idx = 0; idx < fileQuery.startNums.size(); ++idx) {
-            if (!isStripmap && fileQuery.startNums[idx] != frameNum) {
+        for (const auto& path : files) {
+            RpfQueryResult fileQuery{};
+            if (!queryRpfFile(path, fileQuery)) {
                 continue;
             }
-            RpfStreamBlock block{};
-            block.path = path;
-            block.startLine = isStripmap ? fileQuery.startNums[idx] : 1;
-            block.numLines = fileQuery.numLines[idx];
-            block.numPixels = fileQuery.numPixels[idx];
-            block.pixelType = fileQuery.pixelTypes[idx];
-            block.bofImgOffset = fileQuery.bofImgOffsets[idx];
-            stream.blocks_.push_back(block);
-
-            if (!isStripmap) {
-                foundFrame = true;
+            for (std::size_t idx = 0; idx < fileQuery.startNums.size(); ++idx) {
+                RpfStreamBlock block{};
+                block.path = path;
+                block.startLine = fileQuery.startNums[idx];
+                block.numLines = fileQuery.numLines[idx];
+                block.numPixels = fileQuery.numPixels[idx];
+                block.pixelType = fileQuery.pixelTypes[idx];
+                block.bofImgOffset = fileQuery.bofImgOffsets[idx];
+                stream.blocks_.push_back(block);
             }
         }
-
-        if (!isStripmap && foundFrame) {
-            break;
-        }
+    } else {
+        RpfStreamBlock block{};
+        block.path = match.path;
+        block.startLine = 1;
+        block.numLines = match.numLines;
+        block.numPixels = match.numPixels;
+        block.pixelType = match.pixelType;
+        block.bofImgOffset = match.bofImgOffset;
+        stream.blocks_.push_back(block);
     }
 
-    if (!foundFrame || stream.blocks_.empty()) {
+    if (stream.blocks_.empty()) {
         error = "Frame not found";
         return false;
     }
