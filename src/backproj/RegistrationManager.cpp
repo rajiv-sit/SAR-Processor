@@ -87,12 +87,28 @@ RegistrationResult RegistrationManager::registerFrame(Eigen::MatrixXf& image, bo
         applyShift(image, result.dx, result.dy);
     }
 
+    if (params_.alphaAccum > 0.0 && params_.alphaAccum < 1.0) {
+        refX_ = params_.alphaAccum * refX_ + (1.0 - params_.alphaAccum) * cx;
+        refY_ = params_.alphaAccum * refY_ + (1.0 - params_.alphaAccum) * cy;
+    }
+
     results_.push_back(result);
     return result;
 }
 
 bool RegistrationManager::saveJson(const std::string& path) const {
     nlohmann::json payload;
+    payload["reference"] = {{"x", refX_}, {"y", refY_}};
+    payload["params"] = {
+        {"alphaAccum", params_.alphaAccum},
+        {"preShiftImageGrid", params_.preShiftImageGrid},
+        {"regisSearchSize", params_.regisSearchSize},
+        {"marginBlanking", params_.marginBlanking},
+        {"chipSize", params_.chipSize},
+        {"magFactor", params_.magFactor},
+        {"accumPow", params_.accumPow},
+        {"detPow", params_.detPow}
+    };
     payload["results"] = nlohmann::json::array();
     for (const auto& result : results_) {
         payload["results"].push_back({

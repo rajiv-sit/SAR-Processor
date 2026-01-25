@@ -10,6 +10,7 @@ namespace backproj {
 void AutofocusController::reset() {
     frameIndex_ = 0;
     bestMetric_ = 0.0;
+    bestFrameIndex_ = -1;
     results_.clear();
 }
 
@@ -35,6 +36,7 @@ AutofocusResult AutofocusController::analyzeFrame(const Eigen::MatrixXf& image) 
     if (metric >= bestMetric_) {
         bestMetric_ = metric;
         result.isBest = true;
+        bestFrameIndex_ = result.frameIndex;
     }
 
     results_.push_back(result);
@@ -43,6 +45,8 @@ AutofocusResult AutofocusController::analyzeFrame(const Eigen::MatrixXf& image) 
 
 bool AutofocusController::saveJson(const std::string& path) const {
     nlohmann::json payload;
+    payload["bestMetric"] = bestMetric_;
+    payload["bestFrameIndex"] = bestFrameIndex_;
     payload["results"] = nlohmann::json::array();
     for (const auto& result : results_) {
         payload["results"].push_back({

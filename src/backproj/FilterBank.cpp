@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <numbers>
+#include <string>
 
 namespace backproj {
 
@@ -23,6 +24,33 @@ Eigen::VectorXf hammingWindow(std::size_t size, double coef) {
     return window;
 }
 
+void applyBroadening(Eigen::VectorXf& window, double broadening) {
+    if (window.size() == 0 || broadening <= 0.0 || broadening == 1.0) {
+        return;
+    }
+    const double exponent = 1.0 / broadening;
+    for (int i = 0; i < window.size(); ++i) {
+        window(i) = static_cast<float>(std::pow(window(i), exponent));
+    }
+}
+
+void applyScaling(Eigen::VectorXf& window, const std::string& method) {
+    if (window.size() == 0 || method.empty()) {
+        return;
+    }
+    if (method == "totalpower") {
+        const double power = window.array().square().mean();
+        if (power > 0.0) {
+            window /= static_cast<float>(std::sqrt(power));
+        }
+    } else if (method == "sum") {
+        const float sum = window.sum();
+        if (sum != 0.0f) {
+            window /= sum;
+        }
+    }
+}
+
 }  // namespace
 
 FilterBank::FilterBank(FilterParams rangeParams, FilterParams azimuthParams)
@@ -30,11 +58,17 @@ FilterBank::FilterBank(FilterParams rangeParams, FilterParams azimuthParams)
       azimuthParams_(std::move(azimuthParams)) {}
 
 Eigen::VectorXf FilterBank::rangeWindow(std::size_t size) const {
-    return hammingWindow(size, rangeParams_.windowCoef);
+    Eigen::VectorXf window = hammingWindow(size, rangeParams_.windowCoef);
+    applyBroadening(window, rangeParams_.windowBroadening);
+    applyScaling(window, rangeParams_.scalingMethod);
+    return window;
 }
 
 Eigen::VectorXf FilterBank::azimuthWindow(std::size_t size) const {
-    return hammingWindow(size, azimuthParams_.windowCoef);
+    Eigen::VectorXf window = hammingWindow(size, azimuthParams_.windowCoef);
+    applyBroadening(window, azimuthParams_.windowBroadening);
+    applyScaling(window, azimuthParams_.scalingMethod);
+    return window;
 }
 
 void FilterBank::applyWindow(Eigen::MatrixXf& image,
@@ -50,6 +84,27 @@ void FilterBank::applyWindow(Eigen::MatrixXf& image,
     } else if (!alongColumns && image.rows() == window.size()) {
         for (int col = 0; col < image.cols(); ++col) {
             image.col(col) = image.col(col).cwiseProduct(window);
+        }
+    }
+}
+
+void FilterBank::applyWindow(Eigen::MatrixXcf& image,
+                             const Eigen::VectorXf& window,
+                             bool alongColumns) {
+    if (image.size() == 0 || window.size() == 0) {
+        return;
+    }
+    if (alongColumns && image.cols() == window.size()) {
+        for (int row = 0; row < image.rows(); ++row) {
+            for (int col = 0; col < image.cols(); ++col) {
+                image(row, col) *= window(col);
+            }
+        }
+    } else if (!alongColumns && image.rows() == window.size()) {
+        for (int col = 0; col < image.cols(); ++col) {
+            for (int row = 0; row < image.rows(); ++row) {
+                image(row, col) *= window(row);
+            }
         }
     }
 }

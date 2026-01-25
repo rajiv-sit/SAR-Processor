@@ -1,10 +1,14 @@
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "backproj/BackProjectionEngine.hpp"
+#include "sar/SarTapeToRpf.hpp"
+#include "sartape2/SarTapeRecordWriter.hpp"
 
 namespace {
 
@@ -16,7 +20,7 @@ std::filesystem::path makeTempPrefix(const std::string& stem) {
 
 }  // namespace
 
-TEST(BackProjectionEngineTests, WritesStubOutputWhenConfigured) {
+TEST(BackProjectionEngineTests, WritesOutputWhenConfigured) {
     backproj::BackProjOperatorConfig op{};
     op.nPixX = 4;
     op.nPixY = 3;
@@ -30,7 +34,7 @@ TEST(BackProjectionEngineTests, WritesStubOutputWhenConfigured) {
     backproj::BackProjectionEngine engine(op, secondary);
     engine.run();
 
-    const auto path = prefix.string() + "_stub.tif";
+    const auto path = prefix.string() + "_backproj.tif";
     EXPECT_TRUE(std::filesystem::exists(path));
     EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_registration.json"));
     EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_autofocus.json"));
@@ -50,7 +54,7 @@ TEST(BackProjectionEngineTests, SkipsWorkWhenPixelDimsZero) {
     backproj::BackProjectionEngine engine(op, secondary);
     engine.run();
 
-    EXPECT_FALSE(std::filesystem::exists("backproj_stub.tif"));
+    EXPECT_FALSE(std::filesystem::exists("backproj_output.tif"));
     std::filesystem::current_path(prev);
 }
 
@@ -68,9 +72,48 @@ TEST(BackProjectionEngineTests, SkipsRegistrationAndAutofocusWhenDisabled) {
     backproj::BackProjectionEngine engine(op, secondary);
     engine.run();
 
-    EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_stub.tif"));
+    EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_backproj.tif"));
     EXPECT_FALSE(std::filesystem::exists(prefix.string() + "_registration.json"));
     EXPECT_FALSE(std::filesystem::exists(prefix.string() + "_autofocus.json"));
+}
+
+TEST(BackProjectionEngineTests, UsesRpfInputWhenProvided) {
+    const auto tempDir = std::filesystem::temp_directory_path() / "backproj_input";
+    std::filesystem::create_directories(tempDir);
+    const auto sarPath = tempDir / "synthetic_sartape.dat";
+    const auto rpfPath = tempDir / "synthetic_sartape.rpf";
+
+    sartape2::SarTapeRecordWriter writer;
+    ASSERT_TRUE(writer.open(sarPath.string()));
+    for (int record = 0; record < 3; ++record) {
+        std::vector<std::int16_t> iq(128 * 2);
+        for (std::size_t i = 0; i < iq.size(); ++i) {
+            iq[i] = static_cast<std::int16_t>((record + 1) * 5 + static_cast<int>(i % 64));
+        }
+        writer.writeDataRecord(1, static_cast<std::uint16_t>(record + 1),
+                               100 + static_cast<std::uint32_t>(record),
+                               iq);
+    }
+    writer.close();
+
+    std::string error;
+    ASSERT_TRUE(sar::writeRpfFromSarTape(sarPath.string(), rpfPath.string(), 3, error)) << error;
+
+    backproj::BackProjOperatorConfig op{};
+    op.inputFilePath = tempDir.string();
+    op.inputFileName = rpfPath.filename().string();
+    op.nPixX = 0;
+    op.nPixY = 0;
+
+    backproj::BackProjSecondaryConfig secondary{};
+    secondary.rngFilterParams.windowCoef = 0.54;
+    secondary.azmFilterParams.windowCoef = 0.54;
+
+    backproj::BackProjectionEngine engine(op, secondary);
+    const auto image = engine.generateImage();
+
+    EXPECT_GT(image.rows(), 0);
+    EXPECT_GT(image.cols(), 0);
 }
 
 TEST(BackProjectionEngineTests, GenerateImageReturnsConfiguredSize) {

@@ -15,6 +15,9 @@ public:
     static void applyWindow(Eigen::MatrixXf& image,
                             const Eigen::VectorXf& window,
                             bool alongColumns);
+    static void applyWindow(Eigen::MatrixXcf& image,
+                            const Eigen::VectorXf& window,
+                            bool alongColumns);
 
 private:
     FilterParams rangeParams_;

@@ -23,6 +23,7 @@ public:
 private:
     int frameIndex_ = 0;
     double bestMetric_ = 0.0;
+    int bestFrameIndex_ = -1;
     std::vector<AutofocusResult> results_;
 };
 
