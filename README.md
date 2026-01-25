@@ -77,6 +77,14 @@ Outputs include `.dat`, `.vts`, `.hdr`, `.ssp`, and optional complex IQ output.
 ```
 This can be used for tests or to produce sample input data.
 
+## Sample dataset usage
+Sample SarTape2 data for tests lives in `tests/data/`. To run the ingest CLI against the sample:
+```powershell
+.\build\build\Debug\sartape_ingest_cli.exe tests\data\sartape2_ingest_sample.bin samples\sartape2_out
+```
+This writes `samples\sartape2_out.dat/.vts/.hdr/.ssp`. The reference outputs used by tests are
+`tests/data/sartape2_ref.*`.
+
 ## Running the real-time 2D viewer
 1. Start the PyQt viewer:
 ```powershell
