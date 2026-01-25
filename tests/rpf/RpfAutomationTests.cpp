@@ -66,3 +66,18 @@ TEST(RpfAutomationTests, WritesStripmapLinesJson) {
     ASSERT_TRUE(json.contains("lines"));
     EXPECT_EQ(json["lines"].size(), 3u);
 }
+
+TEST(RpfAutomationTests, FailsWhenReportPathInvalid) {
+    const auto path = std::filesystem::temp_directory_path() / "no_dir" / "bad.json";
+    rpf::RpfAutomation automation;
+    rpf::AnnotationStruct annotation{};
+    rpf::LatLongGrid grid{};
+    pta::PtaStats stats{};
+    EXPECT_FALSE(automation.writeAnnotationReport(path.string(), annotation, grid, stats, stats));
+}
+
+TEST(RpfAutomationTests, FailsWhenStripmapPathInvalid) {
+    const auto path = std::filesystem::temp_directory_path() / "no_dir" / "bad_lines.json";
+    rpf::RpfAutomation automation;
+    EXPECT_FALSE(automation.writeStripmapLinesToReprocess(path.string(), {1, 2}));
+}

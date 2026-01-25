@@ -143,3 +143,59 @@ TEST(RpfImageDataParserTests, RejectsZeroDimensionsWhenNotSkipping) {
     rpf::RpfImageDataParser parser;
     EXPECT_FALSE(parser.parseImageData(input, header, false, image));
 }
+
+TEST(RpfImageDataParserTests, ParsesFloatPixelsForDefaultType) {
+    const auto path = makeTempPath("rpf_f32");
+    std::ofstream output(path, std::ios::binary);
+    ASSERT_TRUE(output);
+    writeFloatBe(output, 1.5f);
+    writeFloatBe(output, -2.5f);
+    output.close();
+
+    std::ifstream input(path, std::ios::binary);
+    rpf::ImageDataChunkHeader header{};
+    header.dataWidth = 2;
+    header.dataHeight = 1;
+    header.pixelType = 3;
+
+    Eigen::MatrixXf image;
+    rpf::RpfImageDataParser parser;
+    ASSERT_TRUE(parser.parseImageData(input, header, false, image));
+    EXPECT_NEAR(image(0, 0), 1.5f, 1e-6f);
+    EXPECT_NEAR(image(0, 1), -2.5f, 1e-6f);
+}
+
+TEST(RpfImageDataParserTests, SkipsImageDataWhenConfigured) {
+    const auto path = makeTempPath("rpf_skip");
+    std::ofstream output(path, std::ios::binary);
+    ASSERT_TRUE(output);
+    output.put(static_cast<char>(0xAA));
+    output.put(static_cast<char>(0xBB));
+    output.close();
+
+    std::ifstream input(path, std::ios::binary);
+    rpf::ImageDataChunkHeader header{};
+    header.dataWidth = 2;
+    header.dataHeight = 1;
+    header.pixelType = 0;
+
+    Eigen::MatrixXf image;
+    rpf::RpfImageDataParser parser;
+    ASSERT_TRUE(parser.parseImageData(input, header, true, image));
+    EXPECT_EQ(image.size(), 0);
+}
+
+TEST(RpfImageDataParserTests, RejectsZeroDimensionsWhenSkipping) {
+    const auto path = makeTempPath("rpf_skip_zero");
+    std::ofstream output(path, std::ios::binary);
+    output.close();
+
+    std::ifstream input(path, std::ios::binary);
+    rpf::ImageDataChunkHeader header{};
+    header.dataWidth = 0;
+    header.dataHeight = 0;
+
+    Eigen::MatrixXf image;
+    rpf::RpfImageDataParser parser;
+    EXPECT_FALSE(parser.parseImageData(input, header, true, image));
+}

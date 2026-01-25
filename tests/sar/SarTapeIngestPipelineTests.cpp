@@ -10,6 +10,7 @@
 
 #include "sar/SarTapeConstants.hpp"
 #include "sar/SarTapeIngestPipeline.hpp"
+#include "sar/SarSceneHeader.hpp"
 
 namespace {
 
@@ -140,4 +141,48 @@ TEST(SarTapeIngestPipelineTests, ComplexOutputWritesFloatPairs) {
     const std::uintmax_t expectedSamples = sar::SarTapeConstants::kRecordSize / 2u;
     const std::uintmax_t expectedBytes = expectedSamples * sizeof(std::complex<float>);
     EXPECT_EQ(fileSizeOrZero(outputPrefix.string() + ".dat"), expectedBytes);
+}
+
+TEST(SarTapeIngestPipelineTests, FailsWhenInputMissing) {
+    const auto outputPrefix = makeTempPath("sar_ingest_missing", "");
+    sar::IngestOptions options{};
+    sar::SarTapeIngestPipeline pipeline("missing.dat", outputPrefix.string(), options);
+    EXPECT_EQ(pipeline.run(), 0u);
+}
+
+TEST(SarTapeIngestPipelineTests, FailsWhenOutputPathInvalid) {
+    const auto inputPath = makeTempPath("sar_ingest_input_bad", ".dat");
+    std::ofstream output(inputPath, std::ios::binary);
+    ASSERT_TRUE(output);
+    appendRecord(output, buildRecord(sar::SarTapeConstants::kSyncWord,
+                                     sar::SarTapeConstants::kRecordTypeData,
+                                     1,
+                                     1,
+                                     10u));
+    output.close();
+
+    const auto outputPrefix = std::filesystem::temp_directory_path() / "no_dir" / "bad_output";
+    sar::IngestOptions options{};
+    sar::SarTapeIngestPipeline pipeline(inputPath.string(), outputPrefix.string(), options);
+    EXPECT_EQ(pipeline.run(), 0u);
+}
+
+TEST(SarTapeIngestPipelineTests, ComputesExpectedLinesForMultiSceneModes) {
+    sar::SarSceneHeader header{};
+    header.sarMode = static_cast<std::uint8_t>(sar::SarTapeConstants::kSarModeMaskMultiScene |
+                                               sar::SarTapeConstants::kSarModeMaskRdp);
+    header.endCountStrip = 123;
+    header.numPulsesSpot = 456;
+    EXPECT_EQ(sar::computeExpectedLines(header), sar::SarTapeConstants::kMaxVideoRecsPerScene);
+
+    header.sarMode = static_cast<std::uint8_t>(sar::SarTapeConstants::kSarModeMaskMultiScene);
+    header.endCountStrip = 99;
+    EXPECT_EQ(sar::computeExpectedLines(header), 99u);
+}
+
+TEST(SarTapeIngestPipelineTests, ComputesExpectedLinesForSpotMode) {
+    sar::SarSceneHeader header{};
+    header.sarMode = 0;
+    header.numPulsesSpot = static_cast<std::uint16_t>(sar::SarTapeConstants::kMaxVideoRecsSpot + 1);
+    EXPECT_EQ(sar::computeExpectedLines(header), sar::SarTapeConstants::kMaxVideoRecsSpot);
 }

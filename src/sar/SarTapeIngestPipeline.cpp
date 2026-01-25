@@ -113,6 +113,17 @@ void writeComplexIq(std::ofstream& datOut, const std::vector<std::int8_t>& iqByt
 
 }  // namespace
 
+std::uint32_t computeExpectedLines(const SarSceneHeader& header) {
+    if (header.sarMode & SarTapeConstants::kSarModeMaskMultiScene) {
+        if (header.sarMode & SarTapeConstants::kSarModeMaskRdp) {
+            return SarTapeConstants::kMaxVideoRecsPerScene;
+        }
+        return static_cast<std::uint32_t>(header.endCountStrip);
+    }
+    return std::min<std::uint32_t>(SarTapeConstants::kMaxVideoRecsSpot,
+                                   header.numPulsesSpot);
+}
+
 SarTapeIngestPipeline::SarTapeIngestPipeline(std::string inputPath,
                                              std::string outputPrefix,
                                              IngestOptions options)
@@ -158,16 +169,7 @@ std::uint32_t SarTapeIngestPipeline::run() {
         if (record.header.recordType == SarTapeConstants::kRecordTypeSceneHeader &&
             reader.hasSceneHeader()) {
             const auto& sceneHeader = reader.sceneHeader();
-            if (sceneHeader.sarMode & SarTapeConstants::kSarModeMaskMultiScene) {
-                if (sceneHeader.sarMode & SarTapeConstants::kSarModeMaskRdp) {
-                    expectedLines = SarTapeConstants::kMaxVideoRecsPerScene;
-                } else {
-                    expectedLines = static_cast<std::uint32_t>(sceneHeader.endCountStrip);
-                }
-            } else {
-                expectedLines = std::min<std::uint32_t>(SarTapeConstants::kMaxVideoRecsSpot,
-                                                        sceneHeader.numPulsesSpot);
-            }
+            expectedLines = computeExpectedLines(sceneHeader);
             expectedLinesKnown = true;
         }
 

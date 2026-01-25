@@ -10,6 +10,11 @@ namespace sar {
 
 namespace {
 
+bool setError(std::string& error, const char* message) {
+    error = message;
+    return false;
+}
+
 bool readBytes(std::ifstream& input, std::uint8_t* buffer, std::size_t size) {
     input.read(reinterpret_cast<char*>(buffer), static_cast<std::streamsize>(size));
     return static_cast<bool>(input);
@@ -17,27 +22,21 @@ bool readBytes(std::ifstream& input, std::uint8_t* buffer, std::size_t size) {
 
 bool readU16Be(std::ifstream& input, std::uint16_t& value) {
     std::array<std::uint8_t, 2> buf{};
-    if (!readBytes(input, buf.data(), buf.size())) {
-        return false;
-    }
+    if (!readBytes(input, buf.data(), buf.size())) return false;
     value = static_cast<std::uint16_t>((buf[0] << 8) | buf[1]);
     return true;
 }
 
 bool readI16Be(std::ifstream& input, std::int16_t& value) {
     std::uint16_t temp = 0;
-    if (!readU16Be(input, temp)) {
-        return false;
-    }
+    if (!readU16Be(input, temp)) return false;
     value = static_cast<std::int16_t>(temp);
     return true;
 }
 
 bool readU24Be(std::ifstream& input, std::uint32_t& value) {
     std::array<std::uint8_t, 3> buf{};
-    if (!readBytes(input, buf.data(), buf.size())) {
-        return false;
-    }
+    if (!readBytes(input, buf.data(), buf.size())) return false;
     value = (static_cast<std::uint32_t>(buf[0]) << 16) |
             (static_cast<std::uint32_t>(buf[1]) << 8) |
             static_cast<std::uint32_t>(buf[2]);
@@ -46,9 +45,7 @@ bool readU24Be(std::ifstream& input, std::uint32_t& value) {
 
 bool readU32Be(std::ifstream& input, std::uint32_t& value) {
     std::array<std::uint8_t, 4> buf{};
-    if (!readBytes(input, buf.data(), buf.size())) {
-        return false;
-    }
+    if (!readBytes(input, buf.data(), buf.size())) return false;
     value = (static_cast<std::uint32_t>(buf[0]) << 24) |
             (static_cast<std::uint32_t>(buf[1]) << 16) |
             (static_cast<std::uint32_t>(buf[2]) << 8) |
@@ -59,9 +56,7 @@ bool readU32Be(std::ifstream& input, std::uint32_t& value) {
 std::int16_t readStrangeShort(std::ifstream& input, bool byte1Signed, bool byte2Signed) {
     std::uint8_t raw1 = 0;
     std::uint8_t raw2 = 0;
-    if (!readBytes(input, &raw1, 1) || !readBytes(input, &raw2, 1)) {
-        return 0;
-    }
+    if (!readBytes(input, &raw1, 1) || !readBytes(input, &raw2, 1)) return 0;
     std::int16_t byte1 = byte1Signed ? static_cast<std::int8_t>(raw1)
                                      : static_cast<std::int16_t>(raw1);
     std::int16_t byte2 = byte2Signed ? static_cast<std::int8_t>(raw2)
@@ -83,9 +78,7 @@ double perkinElmerToFloat(std::uint32_t value) {
 
 bool readPerkinElmerFloat(std::ifstream& input, double& value) {
     std::uint32_t raw = 0;
-    if (!readU32Be(input, raw)) {
-        return false;
-    }
+    if (!readU32Be(input, raw)) return false;
     value = perkinElmerToFloat(raw);
     return true;
 }
@@ -93,8 +86,7 @@ bool readPerkinElmerFloat(std::ifstream& input, double& value) {
 bool readSceneHeader(std::ifstream& input, SarSceneHeader& sceneHeader, std::string& error) {
     std::uint16_t byteCount = 0;
     if (!readU16Be(input, byteCount)) {
-        error = "failed to read scene header byteCount";
-        return false;
+        return setError(error, "failed to read scene header byteCount");
     }
     if (byteCount > SarTapeConstants::kMaxSceneHeaderSize) {
         byteCount = SarTapeConstants::kMaxSceneHeaderSize;
@@ -103,44 +95,38 @@ bool readSceneHeader(std::ifstream& input, SarSceneHeader& sceneHeader, std::str
 
     if (!readU16Be(input, sceneHeader.sceneNumber) ||
         !readU32Be(input, sceneHeader.timeStampStartCollect)) {
-        error = "failed to read scene header preamble";
-        return false;
+        return setError(error, "failed to read scene header preamble");
     }
 
     std::uint32_t coarseDelay = 0;
     std::uint8_t fineDelay = 0;
     if (!readU24Be(input, coarseDelay) || !readBytes(input, &fineDelay, 1)) {
-        error = "failed to read initial range delay";
-        return false;
+        return setError(error, "failed to read initial range delay");
     }
     const double delayConvFactor = 20.0 / 256.0;
     sceneHeader.initRangeDelay = (256.0 * coarseDelay + fineDelay) * delayConvFactor;
 
     std::int16_t rangeDelayIncr = 0;
     if (!readI16Be(input, rangeDelayIncr)) {
-        error = "failed to read range delay increment";
-        return false;
+        return setError(error, "failed to read range delay increment");
     }
     sceneHeader.rangeDelayIncr = rangeDelayIncr * delayConvFactor;
     sceneHeader.numPulsesSpot = static_cast<std::uint16_t>(readStrangeShort(input, false, true));
     sceneHeader.endCountStrip = readStrangeShort(input, true, true);
 
     if (!readU16Be(input, sceneHeader.sarTapeVolNum)) {
-        error = "failed to read sarTapeVolNum";
-        return false;
+        return setError(error, "failed to read sarTapeVolNum");
     }
 
     std::array<char, 4> mission{};
     if (!readBytes(input, reinterpret_cast<std::uint8_t*>(mission.data()), mission.size())) {
-        error = "failed to read missionID";
-        return false;
+        return setError(error, "failed to read missionID");
     }
     sceneHeader.missionId.assign(mission.data(), mission.size());
 
     std::uint8_t samplingFreqCode = 0;
     if (!readBytes(input, &samplingFreqCode, 1)) {
-        error = "failed to read samplingFreq";
-        return false;
+        return setError(error, "failed to read samplingFreq");
     }
     if (samplingFreqCode == 255) {
         sceneHeader.samplingFreq = 500.0;
@@ -171,14 +157,12 @@ bool readSceneHeader(std::ifstream& input, SarSceneHeader& sceneHeader, std::str
         !readU16Be(input, sceneHeader.tauAmplitude) ||
         !readU16Be(input, sceneHeader.radarFreq) ||
         !readU16Be(input, sceneHeader.radarPulseWidth)) {
-        error = "failed to read scene header fields";
-        return false;
+        return setError(error, "failed to read scene header fields");
     }
 
     std::uint16_t linearFMRate = 0;
     if (!readU16Be(input, linearFMRate)) {
-        error = "failed to read linearFMRate";
-        return false;
+        return setError(error, "failed to read linearFMRate");
     }
     sceneHeader.linearFMRate = linearFMRate;
 
@@ -190,8 +174,7 @@ bool readSceneHeader(std::ifstream& input, SarSceneHeader& sceneHeader, std::str
         !readBytes(input, &sceneHeader.varRngDelayIncrFlag, 1) ||
         !readBytes(input, &sceneHeader.phaseCorrFlag, 1) ||
         !readBytes(input, &sceneHeader.rngCurvDisabledFlag, 1)) {
-        error = "failed to read flag bytes";
-        return false;
+        return setError(error, "failed to read flag bytes");
     }
 
     std::array<char, 4> ctrlVer{};
@@ -200,8 +183,7 @@ bool readSceneHeader(std::ifstream& input, SarSceneHeader& sceneHeader, std::str
         !readBytes(input, reinterpret_cast<std::uint8_t*>(navVer.data()), navVer.size()) ||
         !readU32Be(input, sceneHeader.unUsed2) ||
         !readU16Be(input, sceneHeader.endMsgCode)) {
-        error = "failed to read version/footer fields";
-        return false;
+        return setError(error, "failed to read version/footer fields");
     }
     sceneHeader.ctrlCompSwVersion.assign(ctrlVer.data(), ctrlVer.size());
     sceneHeader.navCompSwVersion.assign(navVer.data(), navVer.size());

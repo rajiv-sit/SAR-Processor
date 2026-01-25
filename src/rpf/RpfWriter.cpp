@@ -11,6 +11,11 @@ namespace rpf {
 
 namespace {
 
+bool setError(std::string& error, const char* message) {
+    error = message;
+    return false;
+}
+
 void writeU16Be(std::ofstream& output, std::uint16_t value) {
     const std::uint8_t buf[2] = {
         static_cast<std::uint8_t>((value >> 8) & 0xFF),
@@ -155,26 +160,22 @@ bool writeRpfFile(const std::string& path,
                   const RpfWriteOptions& options,
                   std::string& error) {
     if (image.rows() <= 0 || image.cols() <= 0) {
-        error = "RPF writer requires a non-empty image.";
-        return false;
+        return setError(error, "RPF writer requires a non-empty image.");
     }
     if (options.geolocationGridNumLines < 2 || options.geolocationGridNumLines > 5) {
-        error = "RPF writer requires 2-5 geolocation grid lines.";
-        return false;
+        return setError(error, "RPF writer requires 2-5 geolocation grid lines.");
     }
 
     std::ofstream output(path, std::ios::binary);
     if (!output) {
-        error = "Failed to open RPF output file.";
-        return false;
+        return setError(error, "Failed to open RPF output file.");
     }
 
     const std::uint32_t width = static_cast<std::uint32_t>(image.cols());
     const std::uint32_t height = static_cast<std::uint32_t>(image.rows());
     const auto imageChunkStart = writeChunkHeaderPlaceholder(output, RpfConstants::kImageDataChunkTag);
     if (!output) {
-        error = "Failed to write image chunk header.";
-        return false;
+        return setError(error, "Failed to write image chunk header.");
     }
 
     writeI32Be(output, options.frameSeqNum);
@@ -189,8 +190,7 @@ bool writeRpfFile(const std::string& path,
     writeZeros(output, RpfConstants::kImageChunkHeaderSize - 28);
 
     if (!output) {
-        error = "Failed to write image chunk header fields.";
-        return false;
+        return setError(error, "Failed to write image chunk header fields.");
     }
 
     if (options.pixelType == 0) {
@@ -249,13 +249,11 @@ bool writeRpfFile(const std::string& path,
     }
 
     if (!output) {
-        error = "Failed to write image data.";
-        return false;
+        return setError(error, "Failed to write image data.");
     }
     const auto imageChunkEnd = output.tellp();
     if (!finalizeChunkHeader(output, imageChunkStart, imageChunkEnd)) {
-        error = "Failed to finalize image chunk header.";
-        return false;
+        return setError(error, "Failed to finalize image chunk header.");
     }
 
     const std::size_t fixedAnnotationBytes =
@@ -273,8 +271,7 @@ bool writeRpfFile(const std::string& path,
 
     const auto annotationChunkStart = writeChunkHeaderPlaceholder(output, RpfConstants::kAnnotationDataChunkTag);
     if (!output) {
-        error = "Failed to write annotation chunk header.";
-        return false;
+        return setError(error, "Failed to write annotation chunk header.");
     }
 
     std::size_t written = 0;
@@ -330,26 +327,22 @@ bool writeRpfFile(const std::string& path,
     }
 
     if (written > fixedAnnotationBytes) {
-        error = "RPF writer overflowed annotation block.";
-        return false;
+        return setError(error, "RPF writer overflowed annotation block.");
     }
     if (fixedAnnotationBytes > written) {
         writeZeros(output, fixedAnnotationBytes - written);
     }
     const auto annotationChunkEnd = output.tellp();
     if (!finalizeChunkHeader(output, annotationChunkStart, annotationChunkEnd)) {
-        error = "Failed to finalize annotation chunk header.";
-        return false;
+        return setError(error, "Failed to finalize annotation chunk header.");
     }
 
     if (!writeChunkHeader(output, RpfConstants::kEndOfFileChunkTag, 0)) {
-        error = "Failed to write end-of-file chunk.";
-        return false;
+        return setError(error, "Failed to write end-of-file chunk.");
     }
 
     if (!output) {
-        error = "RPF writer failed while writing data.";
-        return false;
+        return setError(error, "RPF writer failed while writing data.");
     }
 
     return true;

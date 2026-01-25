@@ -30,6 +30,12 @@ void writeU32Be(std::vector<std::uint8_t>& buffer, std::size_t offset, std::uint
     buffer[offset + 3] = static_cast<std::uint8_t>(value & 0xFF);
 }
 
+void writeU24Be(std::vector<std::uint8_t>& buffer, std::size_t offset, std::uint32_t value) {
+    buffer[offset] = static_cast<std::uint8_t>((value >> 16) & 0xFF);
+    buffer[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
+    buffer[offset + 2] = static_cast<std::uint8_t>(value & 0xFF);
+}
+
 std::vector<std::uint8_t> buildRecord(std::uint32_t syncWord,
                                       std::uint16_t recordType,
                                       std::uint16_t sceneNumber,
@@ -46,6 +52,106 @@ std::vector<std::uint8_t> buildRecord(std::uint32_t syncWord,
         writeU32Be(record, offset + 4, timeStamp);
         offset += 8;
     }
+
+    return record;
+}
+
+std::vector<std::uint8_t> buildSceneHeaderRecord(std::uint8_t samplingCode,
+                                                 std::uint16_t linearFmRate,
+                                                 std::uint16_t byteCount) {
+    auto record = buildRecord(sar::SarTapeConstants::kSyncWord,
+                              sar::SarTapeConstants::kRecordTypeSceneHeader,
+                              1,
+                              1,
+                              42u);
+
+    std::size_t offset = sar::SarTapeConstants::kRecordHeaderSize;
+    writeU16Be(record, offset, 0);
+    writeU16Be(record, offset + 2, 0);
+    offset += 4;
+
+    writeU16Be(record, offset, byteCount);
+    writeU16Be(record, offset + 2, 7);
+    writeU32Be(record, offset + 4, 123u);
+    offset += 8;
+
+    writeU24Be(record, offset, 0);
+    record[offset + 3] = 0;
+    offset += 4;
+
+    writeU16Be(record, offset, 0);
+    offset += 2;
+    record[offset++] = 0;
+    record[offset++] = 0;
+    record[offset++] = 0;
+    record[offset++] = 0;
+
+    writeU16Be(record, offset, 5);
+    offset += 2;
+    record[offset++] = 'T';
+    record[offset++] = 'E';
+    record[offset++] = 'S';
+    record[offset++] = 'T';
+    record[offset++] = samplingCode;
+
+    record[offset++] = 0;
+    writeU16Be(record, offset, 0);
+    offset += 2;
+    writeU32Be(record, offset, 0);
+    offset += 4;
+    writeU16Be(record, offset, 0);
+    offset += 2;
+    record[offset++] = 0;
+    record[offset++] = 0;
+
+    for (int i = 0; i < 3; ++i) {
+        writeU32Be(record, offset, 0);
+        offset += 4;
+    }
+    writeU32Be(record, offset, 0);
+    offset += 4;
+    for (int i = 0; i < 2; ++i) {
+        writeU32Be(record, offset, 0);
+        offset += 4;
+    }
+    writeU32Be(record, offset, 0);
+    offset += 4;
+    for (int i = 0; i < 2; ++i) {
+        writeU32Be(record, offset, 0);
+        offset += 4;
+    }
+    writeU32Be(record, offset, 0);
+    offset += 4;
+    for (int i = 0; i < 2; ++i) {
+        writeU32Be(record, offset, 0);
+        offset += 4;
+    }
+
+    writeU16Be(record, offset, 0);
+    offset += 2;
+    writeU16Be(record, offset, 0);
+    offset += 2;
+    writeU16Be(record, offset, 0);
+    offset += 2;
+    writeU16Be(record, offset, linearFmRate);
+    offset += 2;
+
+    record[offset++] = 0;
+    record[offset++] = 0;
+    record[offset++] = 0;
+    record[offset++] = 0;
+
+    record[offset++] = 'C';
+    record[offset++] = 'T';
+    record[offset++] = 'R';
+    record[offset++] = 'L';
+    record[offset++] = 'N';
+    record[offset++] = 'A';
+    record[offset++] = 'V';
+    record[offset++] = '0';
+    writeU32Be(record, offset, 0);
+    offset += 4;
+    writeU16Be(record, offset, 0);
 
     return record;
 }
@@ -119,4 +225,47 @@ TEST(SarTapeReaderTests, DummyRecordSwapsBytePairs) {
     EXPECT_EQ(out.iqBytes[firstDataIndex + 1], 0x01);
     EXPECT_EQ(out.iqBytes[firstDataIndex + 2], 0x04);
     EXPECT_EQ(out.iqBytes[firstDataIndex + 3], 0x03);
+}
+
+TEST(SarTapeReaderTests, ReadsSceneHeaderSamplingFrequencyAndLinearFmRate) {
+    const auto path = makeTempPath("sar_scene_header");
+    const auto record = buildSceneHeaderRecord(255, 22, sar::SarTapeConstants::kMaxSceneHeaderSize + 1);
+    writeFile(path, record);
+
+    sar::SarTapeReader reader(path.string());
+    sar::SarTraceRecord out{};
+    ASSERT_TRUE(reader.readRecord(out));
+    ASSERT_TRUE(reader.hasSceneHeader());
+    EXPECT_DOUBLE_EQ(reader.sceneHeader().samplingFreq, 500.0);
+    EXPECT_DOUBLE_EQ(reader.sceneHeader().linearFMRate, 22.5);
+}
+
+TEST(SarTapeReaderTests, HandlesSamplingFrequencyVariants) {
+    const auto path = makeTempPath("sar_scene_header_31");
+    const auto record = buildSceneHeaderRecord(31, 0, sar::SarTapeConstants::kMaxSceneHeaderSize);
+    writeFile(path, record);
+
+    sar::SarTapeReader reader(path.string());
+    sar::SarTraceRecord out{};
+    ASSERT_TRUE(reader.readRecord(out));
+    ASSERT_TRUE(reader.hasSceneHeader());
+    EXPECT_DOUBLE_EQ(reader.sceneHeader().samplingFreq, 31.25);
+}
+
+TEST(SarTapeReaderTests, ReadsSceneHeaderSamplingFrequencyDefault) {
+    const auto path = makeTempPath("sar_scene_header_default");
+    const auto record = buildSceneHeaderRecord(12, 0, sar::SarTapeConstants::kMaxSceneHeaderSize);
+    writeFile(path, record);
+
+    sar::SarTapeReader reader(path.string());
+    sar::SarTraceRecord out{};
+    ASSERT_TRUE(reader.readRecord(out));
+    ASSERT_TRUE(reader.hasSceneHeader());
+    EXPECT_DOUBLE_EQ(reader.sceneHeader().samplingFreq, 12.0);
+}
+
+TEST(SarTapeReaderTests, ReturnsFalseWhenFileMissing) {
+    sar::SarTapeReader reader("missing_file.dat");
+    sar::SarTraceRecord out{};
+    EXPECT_FALSE(reader.readRecord(out));
 }

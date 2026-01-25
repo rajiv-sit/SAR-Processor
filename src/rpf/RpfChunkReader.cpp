@@ -19,18 +19,14 @@ bool readBytes(std::ifstream& input, std::uint8_t* buffer, std::size_t size) {
 
 bool readU16Be(std::ifstream& input, std::uint16_t& value) {
     std::array<std::uint8_t, 2> buf{};
-    if (!readBytes(input, buf.data(), buf.size())) {
-        return false;
-    }
+    if (!readBytes(input, buf.data(), buf.size())) return false;
     value = static_cast<std::uint16_t>((buf[0] << 8) | buf[1]);
     return true;
 }
 
 bool readU32Be(std::ifstream& input, std::uint32_t& value) {
     std::array<std::uint8_t, 4> buf{};
-    if (!readBytes(input, buf.data(), buf.size())) {
-        return false;
-    }
+    if (!readBytes(input, buf.data(), buf.size())) return false;
     value = (static_cast<std::uint32_t>(buf[0]) << 24) |
             (static_cast<std::uint32_t>(buf[1]) << 16) |
             (static_cast<std::uint32_t>(buf[2]) << 8) |
@@ -40,9 +36,7 @@ bool readU32Be(std::ifstream& input, std::uint32_t& value) {
 
 bool readI32Be(std::ifstream& input, std::int32_t& value) {
     std::uint32_t temp = 0;
-    if (!readU32Be(input, temp)) {
-        return false;
-    }
+    if (!readU32Be(input, temp)) return false;
     value = static_cast<std::int32_t>(temp);
     return true;
 }
@@ -63,24 +57,16 @@ bool RpfChunkReader::readBlock(std::uint32_t blockIndex,
                                AnnotationStruct& annotation,
                                LatLongGrid& latLongGrid,
                                bool skipImageData) {
-    if (!input_.is_open()) {
-        return false;
-    }
+    if (!input_.is_open()) return false;
 
     std::uint32_t blockCount = 1;
     while (true) {
         RpfChunkHeader header{};
-        if (!readChunkHeader(header)) {
-            return false;
-        }
+        if (!readChunkHeader(header)) return false;
 
-        if (header.syncCode != RpfConstants::kChunkSyncCode) {
-            return false;
-        }
+        if (header.syncCode != RpfConstants::kChunkSyncCode) return false;
 
-        if (header.chunkType == RpfConstants::kEndOfFileChunkTag) {
-            return false;
-        }
+        if (header.chunkType == RpfConstants::kEndOfFileChunkTag) return false;
 
         if (header.chunkType == RpfConstants::kAnnotationDataChunkTag) {
             ++blockCount;
@@ -92,9 +78,7 @@ bool RpfChunkReader::readBlock(std::uint32_t blockIndex,
         }
 
         std::uint32_t nextOffset = 0;
-        if (!readImageDataChunkHeader(annotation.imageDataChunkHeader, nextOffset)) {
-            return false;
-        }
+        if (!readImageDataChunkHeader(annotation.imageDataChunkHeader, nextOffset)) return false;
         annotation.imageRect.startLine = 1;
         annotation.imageRect.startPixel = 1;
         annotation.imageRect.numLines = annotation.imageDataChunkHeader.dataHeight;
@@ -110,18 +94,12 @@ bool RpfChunkReader::readBlock(std::uint32_t blockIndex,
 
         Eigen::MatrixXf imageData;
         RpfImageDataParser parser;
-        if (!parser.parseImageData(input_, annotation.imageDataChunkHeader, skipImageData, imageData)) {
-            return false;
-        }
+        if (!parser.parseImageData(input_, annotation.imageDataChunkHeader, skipImageData, imageData)) return false;
 
         input_.seekg(static_cast<std::streamoff>(header.bofOffsetToNextChunk), std::ios::beg);
-        if (!readAnnotationChunk(annotation, nextOffset)) {
-            return false;
-        }
+        if (!readAnnotationChunk(annotation, nextOffset)) return false;
 
-        if (!readGeoGridLines(annotation, latLongGrid)) {
-            return false;
-        }
+        if (!readGeoGridLines(annotation, latLongGrid)) return false;
 
         input_.seekg(static_cast<std::streamoff>(nextOffset), std::ios::beg);
         return true;
@@ -130,16 +108,10 @@ bool RpfChunkReader::readBlock(std::uint32_t blockIndex,
 
 bool RpfChunkReader::readChunkHeader(RpfChunkHeader& header) {
     std::uint16_t sync = 0;
-    if (!readU16Be(input_, sync)) {
-        return false;
-    }
+    if (!readU16Be(input_, sync)) return false;
     header.syncCode = sync;
-    if (!readU16Be(input_, header.chunkType)) {
-        return false;
-    }
-    if (!readU32Be(input_, header.chunkSize)) {
-        return false;
-    }
+    if (!readU16Be(input_, header.chunkType)) return false;
+    if (!readU32Be(input_, header.chunkSize)) return false;
     const auto position = static_cast<std::uint32_t>(input_.tellg());
     header.bofOffsetToNextChunk =
         position + header.chunkSize * RpfConstants::kChunkBlockSize;
@@ -148,31 +120,19 @@ bool RpfChunkReader::readChunkHeader(RpfChunkHeader& header) {
 
 bool RpfChunkReader::readImageDataChunkHeader(ImageDataChunkHeader& header, std::uint32_t& nextOffset) {
     const auto headerStart = static_cast<std::uint32_t>(input_.tellg());
-    if (!readI32Be(input_, header.frameSeqNum)) {
-        return false;
-    }
-        std::int32_t dataWidth = 0;
-        std::int32_t dataHeight = 0;
-        if (!readI32Be(input_, dataWidth)) {
-            return false;
-        }
-        if (!readI32Be(input_, dataHeight)) {
-            return false;
-        }
-        header.dataWidth = static_cast<std::uint32_t>(dataWidth);
-        header.dataHeight = static_cast<std::uint32_t>(dataHeight);
-        if (!readI32Be(input_, header.pixelType)) {
-            return false;
-        }
-    if (!readI32Be(input_, header.rspInhibit)) {
-        return false;
-    }
+    if (!readI32Be(input_, header.frameSeqNum)) return false;
+    std::int32_t dataWidth = 0;
+    std::int32_t dataHeight = 0;
+    if (!readI32Be(input_, dataWidth)) return false;
+    if (!readI32Be(input_, dataHeight)) return false;
+    header.dataWidth = static_cast<std::uint32_t>(dataWidth);
+    header.dataHeight = static_cast<std::uint32_t>(dataHeight);
+    if (!readI32Be(input_, header.pixelType)) return false;
+    if (!readI32Be(input_, header.rspInhibit)) return false;
     if (!readU16Be(input_, header.pixelMarginStart) ||
         !readU16Be(input_, header.pixelMarginEnd) ||
         !readU16Be(input_, header.lineMarginStart) ||
-        !readU16Be(input_, header.lineMarginEnd)) {
-        return false;
-    }
+        !readU16Be(input_, header.lineMarginEnd)) return false;
     const auto position = static_cast<std::uint32_t>(input_.tellg());
     const auto headerEnd = headerStart + RpfConstants::kImageChunkHeaderSize;
     if (position < headerEnd) {
@@ -185,13 +145,9 @@ bool RpfChunkReader::readImageDataChunkHeader(ImageDataChunkHeader& header, std:
 bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint32_t& nextOffset) {
     const auto annotationStart = static_cast<std::uint32_t>(input_.tellg());
     RpfChunkHeader header{};
-    if (!readChunkHeader(header)) {
-        return false;
-    }
+    if (!readChunkHeader(header)) return false;
     if (header.syncCode != RpfConstants::kChunkSyncCode ||
-        header.chunkType != RpfConstants::kAnnotationDataChunkTag) {
-        return false;
-    }
+        header.chunkType != RpfConstants::kAnnotationDataChunkTag) return false;
     const auto annotationPayloadStart =
         annotationStart + RpfConstants::kChunkCommonHeaderSize;
     input_.seekg(static_cast<std::streamoff>(annotationPayloadStart + RpfConstants::kAnnotationHeaderSize),
@@ -199,9 +155,7 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
 
     std::int32_t fileType = 0;
     std::int32_t radarMode = 0;
-    if (!readI32Be(input_, fileType) || !readI32Be(input_, radarMode)) {
-        return false;
-    }
+    if (!readI32Be(input_, fileType) || !readI32Be(input_, radarMode)) return false;
     annotation.fileIdParams.radarMode = static_cast<std::uint8_t>(radarMode);
     annotation.fileIdParams.fileType = fileType;
     annotation.notes.summary =
@@ -226,15 +180,11 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
     for (int i = 0; i < 8; ++i) {
         std::uint32_t hi = 0;
         std::uint32_t lo = 0;
-        if (!readU32Be(input_, hi) || !readU32Be(input_, lo)) {
-            return false;
-        }
+        if (!readU32Be(input_, hi) || !readU32Be(input_, lo)) return false;
     }
 
     std::int32_t gridLines = 0;
-    if (!readI32Be(input_, gridLines)) {
-        return false;
-    }
+    if (!readI32Be(input_, gridLines)) return false;
     annotation.latLongOutput.geolocationGridNumLines =
         static_cast<std::uint16_t>(gridLines);
 
@@ -268,31 +218,21 @@ bool RpfChunkReader::readGeoGridLines(const AnnotationStruct& annotation, LatLon
     grid.endLongitude.assign(entries, 0.0);
     for (std::size_t i = 0; i < entries; ++i) {
         std::int32_t lineNumber = 0;
-        if (!readI32Be(input_, lineNumber)) {
-            return false;
-        }
+        if (!readI32Be(input_, lineNumber)) return false;
         grid.lineNumber[i] = lineNumber;
 
         std::uint32_t buf = 0;
-        if (!readU32Be(input_, buf)) {
-            return false;
-        }
+        if (!readU32Be(input_, buf)) return false;
         std::memcpy(&grid.beginGrSrRatio[i], &buf, sizeof(float));
-        if (!readU32Be(input_, buf)) {
-            return false;
-        }
+        if (!readU32Be(input_, buf)) return false;
         std::memcpy(&grid.midGrSrRatio[i], &buf, sizeof(float));
-        if (!readU32Be(input_, buf)) {
-            return false;
-        }
+        if (!readU32Be(input_, buf)) return false;
         std::memcpy(&grid.endGrSrRatio[i], &buf, sizeof(float));
 
         for (int j = 0; j < 6; ++j) {
             std::uint32_t hi = 0;
             std::uint32_t lo = 0;
-            if (!readU32Be(input_, hi) || !readU32Be(input_, lo)) {
-                return false;
-            }
+            if (!readU32Be(input_, hi) || !readU32Be(input_, lo)) return false;
             std::uint64_t raw = (static_cast<std::uint64_t>(hi) << 32) |
                                 static_cast<std::uint64_t>(lo);
             double value = 0.0;

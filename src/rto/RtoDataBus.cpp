@@ -63,14 +63,9 @@ bool RtoDataBus::publish(const RtoFrame& frame) {
 
 #ifdef _WIN32
     WSADATA wsaData{};
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        return false;
-    }
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) return false;
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock == INVALID_SOCKET) {
-        WSACleanup();
-        return false;
-    }
+    if (sock == INVALID_SOCKET) return (WSACleanup(), false);
 #else
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {

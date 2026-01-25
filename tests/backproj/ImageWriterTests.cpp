@@ -133,6 +133,19 @@ TEST(ImageWriterTests, WritesTiffFile) {
     EXPECT_TRUE(std::filesystem::exists(path));
 }
 
+TEST(ImageWriterTests, RejectsEmptyImage) {
+    Eigen::MatrixXf image;
+    const auto path = std::filesystem::temp_directory_path() / "empty.tif";
+    EXPECT_FALSE(backproj::writeTiff(path.string(), image));
+}
+
+TEST(ImageWriterTests, FailsForInvalidPath) {
+    Eigen::MatrixXf image(1, 1);
+    image(0, 0) = 1.0f;
+    const auto path = std::filesystem::temp_directory_path() / "no_dir" / "bad.tif";
+    EXPECT_FALSE(backproj::writeTiff(path.string(), image));
+}
+
 TEST(ImageWriterTests, WritesTiffDimensionsAndScaling) {
     Eigen::MatrixXf image(2, 2);
     image << 1.0f, 2.0f,

@@ -16,18 +16,14 @@ bool readBytes(std::ifstream& input, std::uint8_t* buffer, std::size_t size) {
 
 bool readU16Be(std::ifstream& input, std::uint16_t& value) {
     std::array<std::uint8_t, 2> buf{};
-    if (!readBytes(input, buf.data(), buf.size())) {
-        return false;
-    }
+    if (!readBytes(input, buf.data(), buf.size())) return false;
     value = static_cast<std::uint16_t>((buf[0] << 8) | buf[1]);
     return true;
 }
 
 bool readU32Be(std::ifstream& input, std::uint32_t& value) {
     std::array<std::uint8_t, 4> buf{};
-    if (!readBytes(input, buf.data(), buf.size())) {
-        return false;
-    }
+    if (!readBytes(input, buf.data(), buf.size())) return false;
     value = (static_cast<std::uint32_t>(buf[0]) << 24) |
             (static_cast<std::uint32_t>(buf[1]) << 16) |
             (static_cast<std::uint32_t>(buf[2]) << 8) |
@@ -58,9 +54,7 @@ float halfToFloat(std::uint16_t value) {
 
 float readFloatBe(std::ifstream& input) {
     std::uint32_t raw = 0;
-    if (!readU32Be(input, raw)) {
-        return 0.0f;
-    }
+    if (!readU32Be(input, raw)) return 0.0f;
     float value = 0.0f;
     std::memcpy(&value, &raw, sizeof(value));
     return value;
@@ -68,9 +62,7 @@ float readFloatBe(std::ifstream& input) {
 
 float readHalfBe(std::ifstream& input) {
     std::uint16_t raw = 0;
-    if (!readU16Be(input, raw)) {
-        return 0.0f;
-    }
+    if (!readU16Be(input, raw)) return 0.0f;
     return halfToFloat(raw);
 }
 

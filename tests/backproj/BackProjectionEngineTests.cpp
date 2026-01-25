@@ -35,3 +35,40 @@ TEST(BackProjectionEngineTests, WritesStubOutputWhenConfigured) {
     EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_registration.json"));
     EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_autofocus.json"));
 }
+
+TEST(BackProjectionEngineTests, SkipsWorkWhenPixelDimsZero) {
+    const auto tempDir = std::filesystem::temp_directory_path() / "backproj_empty";
+    std::filesystem::create_directories(tempDir);
+    const auto prev = std::filesystem::current_path();
+    std::filesystem::current_path(tempDir);
+
+    backproj::BackProjOperatorConfig op{};
+    op.nPixX = 0;
+    op.nPixY = 4;
+    backproj::BackProjSecondaryConfig secondary{};
+
+    backproj::BackProjectionEngine engine(op, secondary);
+    engine.run();
+
+    EXPECT_FALSE(std::filesystem::exists("backproj_stub.tif"));
+    std::filesystem::current_path(prev);
+}
+
+TEST(BackProjectionEngineTests, SkipsRegistrationAndAutofocusWhenDisabled) {
+    backproj::BackProjOperatorConfig op{};
+    op.nPixX = 2;
+    op.nPixY = 2;
+    op.applyAutoFocus = false;
+    op.applyFrameRegistration = false;
+    const auto prefix = makeTempPrefix("backproj_disabled");
+    op.rpfBaseFileName = prefix.string();
+
+    backproj::BackProjSecondaryConfig secondary{};
+
+    backproj::BackProjectionEngine engine(op, secondary);
+    engine.run();
+
+    EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_stub.tif"));
+    EXPECT_FALSE(std::filesystem::exists(prefix.string() + "_registration.json"));
+    EXPECT_FALSE(std::filesystem::exists(prefix.string() + "_autofocus.json"));
+}

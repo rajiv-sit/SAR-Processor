@@ -5,6 +5,8 @@
 
 namespace sar {
 
+struct SarSceneHeader;
+
 enum class ErrorPolicy {
     kFatal,
     kBestEffort
@@ -26,5 +28,7 @@ private:
     std::string outputPrefix_;
     IngestOptions options_;
 };
+
+std::uint32_t computeExpectedLines(const SarSceneHeader& header);
 
 }  // namespace sar

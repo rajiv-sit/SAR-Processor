@@ -16,18 +16,14 @@ bool readBytes(std::ifstream& input, std::uint8_t* buffer, std::size_t size) {
 
 bool readU16Be(std::ifstream& input, std::uint16_t& value) {
     std::array<std::uint8_t, 2> buf{};
-    if (!readBytes(input, buf.data(), buf.size())) {
-        return false;
-    }
+    if (!readBytes(input, buf.data(), buf.size())) return false;
     value = static_cast<std::uint16_t>((buf[0] << 8) | buf[1]);
     return true;
 }
 
 bool readU32Be(std::ifstream& input, std::uint32_t& value) {
     std::array<std::uint8_t, 4> buf{};
-    if (!readBytes(input, buf.data(), buf.size())) {
-        return false;
-    }
+    if (!readBytes(input, buf.data(), buf.size())) return false;
     value = (static_cast<std::uint32_t>(buf[0]) << 24) |
             (static_cast<std::uint32_t>(buf[1]) << 16) |
             (static_cast<std::uint32_t>(buf[2]) << 8) |
@@ -37,9 +33,7 @@ bool readU32Be(std::ifstream& input, std::uint32_t& value) {
 
 bool readI32Be(std::ifstream& input, std::int32_t& value) {
     std::uint32_t temp = 0;
-    if (!readU32Be(input, temp)) {
-        return false;
-    }
+    if (!readU32Be(input, temp)) return false;
     value = static_cast<std::int32_t>(temp);
     return true;
 }
@@ -53,16 +47,10 @@ struct ChunkHeader {
 
 bool readChunkHeader(std::ifstream& input, ChunkHeader& header) {
     std::uint16_t sync = 0;
-    if (!readU16Be(input, sync)) {
-        return false;
-    }
+    if (!readU16Be(input, sync)) return false;
     header.syncCode = sync;
-    if (!readU16Be(input, header.chunkType)) {
-        return false;
-    }
-    if (!readU32Be(input, header.chunkSize)) {
-        return false;
-    }
+    if (!readU16Be(input, header.chunkType)) return false;
+    if (!readU32Be(input, header.chunkSize)) return false;
     const auto position = static_cast<std::uint32_t>(input.tellg());
     header.bofOffsetToNextChunk =
         position + header.chunkSize * RpfConstants::kChunkBlockSize;
@@ -73,20 +61,14 @@ bool readChunkHeader(std::ifstream& input, ChunkHeader& header) {
 
 bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
     std::ifstream input(fileName, std::ios::binary);
-    if (!input) {
-        return false;
-    }
+    if (!input) return false;
 
     while (true) {
         const auto chunkHeaderStart = static_cast<std::uint32_t>(input.tellg());
         ChunkHeader header{};
-        if (!readChunkHeader(input, header)) {
-            return false;
-        }
+        if (!readChunkHeader(input, header)) return false;
 
-        if (header.syncCode != RpfConstants::kChunkSyncCode) {
-            return false;
-        }
+        if (header.syncCode != RpfConstants::kChunkSyncCode) return false;
 
         if (header.chunkType == RpfConstants::kEndOfFileChunkTag) {
             break;
@@ -119,9 +101,7 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
             !readU16Be(input, marginStart) ||
             !readU16Be(input, marginEnd) ||
             !readU16Be(input, lineMarginStart) ||
-            !readU16Be(input, lineMarginEnd)) {
-            return false;
-        }
+            !readU16Be(input, lineMarginEnd)) return false;
 
         const auto imageHeaderEnd = imageHeaderStart + RpfConstants::kImageChunkHeaderSize;
         if (static_cast<std::uint32_t>(input.tellg()) < imageHeaderEnd) {
@@ -131,22 +111,16 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
         input.seekg(static_cast<std::streamoff>(header.bofOffsetToNextChunk), std::ios::beg);
         const auto annotationStart = static_cast<std::uint32_t>(input.tellg());
         ChunkHeader annotationHeader{};
-        if (!readChunkHeader(input, annotationHeader)) {
-            return false;
-        }
+        if (!readChunkHeader(input, annotationHeader)) return false;
         if (annotationHeader.syncCode != RpfConstants::kChunkSyncCode ||
-            annotationHeader.chunkType != RpfConstants::kAnnotationDataChunkTag) {
-            return false;
-        }
+            annotationHeader.chunkType != RpfConstants::kAnnotationDataChunkTag) return false;
 
         const std::uint32_t annotationPayloadStart =
             annotationStart + RpfConstants::kChunkCommonHeaderSize;
         input.seekg(static_cast<std::streamoff>(annotationPayloadStart + RpfConstants::kAnnotationHeaderSize), std::ios::beg);
         std::int32_t fileType = 0;
         std::int32_t radarMode = 0;
-        if (!readI32Be(input, fileType) || !readI32Be(input, radarMode)) {
-            return false;
-        }
+        if (!readI32Be(input, fileType) || !readI32Be(input, radarMode)) return false;
         if (result.mode == -1) {
             result.mode = radarMode;
         }
@@ -168,9 +142,7 @@ bool queryRpfFile(const std::string& fileName, RpfQueryResult& result) {
 
             input.seekg(static_cast<std::streamoff>(geoGridOffset), std::ios::beg);
             std::int32_t lineNumber = 0;
-            if (!readI32Be(input, lineNumber)) {
-                return false;
-            }
+            if (!readI32Be(input, lineNumber)) return false;
             startNum = lineNumber;
         } else {
             startNum = frameSeqNum;

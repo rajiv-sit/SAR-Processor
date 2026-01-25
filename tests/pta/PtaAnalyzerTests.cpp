@@ -106,3 +106,24 @@ TEST(PtaAnalyzerTests, FindPeaksFiltersBySeparationFor2D) {
     ASSERT_EQ(peaks.size(), 1u);
     EXPECT_EQ(peaks[0].index, 2u);
 }
+
+TEST(PtaAnalyzerTests, FindPeaksReturnsEmptyWhenMaxPeaksZero) {
+    pta::PtaChip chip;
+    chip.chipIn.resize(1, 5);
+    chip.chipIn << 0.0f, 1.0f, 0.0f, 2.0f, 0.0f;
+
+    pta::PtaAnalyzer analyzer;
+    const auto peaks = analyzer.findPeaks1D(chip, 0, 1);
+    EXPECT_TRUE(peaks.empty());
+}
+
+TEST(PtaAnalyzerTests, FindPeaksSkipsTooClosePeaks) {
+    pta::PtaChip chip;
+    chip.chipIn.resize(1, 6);
+    chip.chipIn << 0.0f, 3.0f, 0.0f, 2.5f, 0.0f, 1.0f;
+
+    pta::PtaAnalyzer analyzer;
+    const auto peaks = analyzer.findPeaks1D(chip, 3, 3);
+    ASSERT_EQ(peaks.size(), 1u);
+    EXPECT_EQ(peaks[0].index, 2u);
+}

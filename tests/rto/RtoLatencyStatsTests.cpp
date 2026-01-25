@@ -15,6 +15,18 @@ TEST(RtoLatencyStatsTests, TracksMinMaxMean) {
     EXPECT_NEAR(snapshot.meanNs, 20.0, 1e-6);
 }
 
+TEST(RtoLatencyStatsTests, UpdatesMinAndMax) {
+    rto::RtoLatencyStats stats;
+    stats.update(100, 110);
+    stats.update(100, 105);
+    stats.update(100, 140);
+
+    const auto snapshot = stats.snapshot();
+    EXPECT_EQ(snapshot.minNs, 5u);
+    EXPECT_EQ(snapshot.maxNs, 40u);
+    EXPECT_EQ(snapshot.count, 3u);
+}
+
 TEST(RtoLatencyStatsTests, ResetClearsStats) {
     rto::RtoLatencyStats stats;
     stats.update(10, 20);
