@@ -6,8 +6,8 @@ except ImportError:  # Conan < 2.0
     cmake_layout = None
 
 
-class CPlusPlusSarConan(ConanFile):
-    name = "CPlusPlusSAR"
+class SARProcessor(ConanFile):
+    name = "SARProcessor"
     version = "0.1.0"
     license = "MIT"
     url = "https://github.com/rajiv-sit/SAR-Processor"

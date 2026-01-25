@@ -12,9 +12,9 @@ BackProjectionEngine::BackProjectionEngine(BackProjOperatorConfig operatorConfig
     : operatorConfig_(std::move(operatorConfig)),
       secondaryConfig_(std::move(secondaryConfig)) {}
 
-void BackProjectionEngine::run() {
+Eigen::MatrixXf BackProjectionEngine::generateImage() {
     if (operatorConfig_.nPixX == 0 || operatorConfig_.nPixY == 0) {
-        return;
+        return {};
     }
 
     Eigen::MatrixXf image(static_cast<int>(operatorConfig_.nPixY),
@@ -39,6 +39,15 @@ void BackProjectionEngine::run() {
 
     if (operatorConfig_.applyAutoFocus) {
         autofocusController_.analyzeFrame(image);
+    }
+
+    return image;
+}
+
+void BackProjectionEngine::run() {
+    Eigen::MatrixXf image = generateImage();
+    if (image.size() == 0) {
+        return;
     }
 
     std::string outputPath = "backproj_stub.tif";

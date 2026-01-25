@@ -10,7 +10,9 @@ namespace {
 void printUsage() {
     std::cout
         << "Usage: rto_visualizer_cli [--endpoint udp://127.0.0.1:5000] "
-           "[--width N] [--height N] [--frames N] [--interval-ms N]\n";
+           "[--width N] [--height N] [--frames N] [--interval-ms N]\n"
+           "Publishes a back-projection preview frame to the RTO viewer.\n"
+           "Large images are downsampled to fit a single UDP packet.\n";
 }
 
 bool readUint(const char* value, std::uint32_t& out) {

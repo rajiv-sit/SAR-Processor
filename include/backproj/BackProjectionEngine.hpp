@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Eigen/Dense>
+
 #include "backproj/AutofocusController.hpp"
 #include "backproj/BackProjOperatorConfig.hpp"
 #include "backproj/BackProjSecondaryConfig.hpp"
@@ -13,6 +15,7 @@ public:
                          BackProjSecondaryConfig secondaryConfig);
 
     void run();
+    Eigen::MatrixXf generateImage();
 
 private:
     BackProjOperatorConfig operatorConfig_;

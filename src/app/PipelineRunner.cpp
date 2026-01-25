@@ -1,8 +1,11 @@
 #include "app/PipelineRunner.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <thread>
+
+#include <Eigen/Dense>
 
 #include "backproj/BackProjConfigLoader.hpp"
 #include "backproj/BackProjectionEngine.hpp"
@@ -43,6 +46,7 @@ bool PipelineRunner::runRtoPreview(const std::string& endpoint,
                                    std::uint32_t intervalMs) {
     backproj::BackProjConfigLoader loader;
     auto operatorConfig = loader.loadOperatorConfig("configs/backproj/operator.json");
+    auto secondaryConfig = loader.loadSecondaryConfig("configs/backproj/secondary.json");
 
     if (width == 0) {
         width = operatorConfig.nPixX > 0 ? operatorConfig.nPixX : 256;
@@ -54,24 +58,61 @@ bool PipelineRunner::runRtoPreview(const std::string& endpoint,
         frames = 1;
     }
 
+    operatorConfig.nPixX = width;
+    operatorConfig.nPixY = height;
+
+    backproj::BackProjectionEngine engine(operatorConfig, secondaryConfig);
+    const Eigen::MatrixXf image = engine.generateImage();
+    if (image.size() == 0) {
+        return false;
+    }
+
     rto::RtoDataBus bus(endpoint);
     rto::RtoFrame frame{};
-    frame.width = width;
-    frame.height = height;
-    frame.pixels.resize(static_cast<std::size_t>(width) * height);
+    std::uint32_t outWidth = static_cast<std::uint32_t>(image.cols());
+    std::uint32_t outHeight = static_cast<std::uint32_t>(image.rows());
 
-    for (std::size_t frameIndex = 0; frameIndex < frames; ++frameIndex) {
-        const float phase = static_cast<float>(frameIndex) * 0.15f;
-        for (std::uint32_t y = 0; y < height; ++y) {
-            const float fy = static_cast<float>(y) / static_cast<float>(height);
-            for (std::uint32_t x = 0; x < width; ++x) {
-                const float fx = static_cast<float>(x) / static_cast<float>(width);
-                const float value =
-                    0.5f + 0.5f * std::sin((fx * 6.2831853f) + phase) * std::cos((fy * 6.2831853f) - phase);
-                frame.pixels[static_cast<std::size_t>(y) * width + x] = value;
+    constexpr std::size_t kUdpMaxPayload = 65507;
+    const std::size_t maxPixels = (kUdpMaxPayload - 16) / sizeof(float);
+    const std::size_t pixelCount = static_cast<std::size_t>(outWidth) * outHeight;
+    if (pixelCount > maxPixels) {
+        const double scale = std::sqrt(static_cast<double>(maxPixels) / static_cast<double>(pixelCount));
+        outWidth = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(outWidth * scale));
+        outHeight = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(outHeight * scale));
+        while (static_cast<std::size_t>(outWidth) * outHeight > maxPixels) {
+            if (outWidth >= outHeight && outWidth > 1) {
+                --outWidth;
+            } else if (outHeight > 1) {
+                --outHeight;
+            } else {
+                break;
             }
         }
+    }
 
+    frame.width = outWidth;
+    frame.height = outHeight;
+    frame.pixels.resize(static_cast<std::size_t>(frame.width) * frame.height);
+    if (outWidth == static_cast<std::uint32_t>(image.cols()) &&
+        outHeight == static_cast<std::uint32_t>(image.rows())) {
+        for (int row = 0; row < image.rows(); ++row) {
+            for (int col = 0; col < image.cols(); ++col) {
+                frame.pixels[static_cast<std::size_t>(row) * frame.width + col] = image(row, col);
+            }
+        }
+    } else {
+        for (std::uint32_t y = 0; y < outHeight; ++y) {
+            const int srcY = static_cast<int>(
+                static_cast<std::size_t>(y) * image.rows() / outHeight);
+            for (std::uint32_t x = 0; x < outWidth; ++x) {
+                const int srcX = static_cast<int>(
+                    static_cast<std::size_t>(x) * image.cols() / outWidth);
+                frame.pixels[static_cast<std::size_t>(y) * outWidth + x] = image(srcY, srcX);
+            }
+        }
+    }
+
+    for (std::size_t frameIndex = 0; frameIndex < frames; ++frameIndex) {
         frame.timestampNs = static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::system_clock::now().time_since_epoch())

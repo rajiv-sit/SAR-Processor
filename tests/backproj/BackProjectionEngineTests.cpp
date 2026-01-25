@@ -72,3 +72,20 @@ TEST(BackProjectionEngineTests, SkipsRegistrationAndAutofocusWhenDisabled) {
     EXPECT_FALSE(std::filesystem::exists(prefix.string() + "_registration.json"));
     EXPECT_FALSE(std::filesystem::exists(prefix.string() + "_autofocus.json"));
 }
+
+TEST(BackProjectionEngineTests, GenerateImageReturnsConfiguredSize) {
+    backproj::BackProjOperatorConfig op{};
+    op.nPixX = 5;
+    op.nPixY = 4;
+
+    backproj::BackProjSecondaryConfig secondary{};
+    secondary.rngFilterParams.windowCoef = 0.54;
+    secondary.azmFilterParams.windowCoef = 0.54;
+
+    backproj::BackProjectionEngine engine(op, secondary);
+    const auto image = engine.generateImage();
+
+    EXPECT_EQ(image.rows(), 4);
+    EXPECT_EQ(image.cols(), 5);
+    EXPECT_GT(image.sum(), 0.0f);
+}
