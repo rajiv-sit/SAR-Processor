@@ -106,5 +106,3 @@ Back-projection uses JSON config files in `configs/backproj/`.
 - Some integration tests require external data and may skip when inputs are not provided.
 - The 2D viewer uses UDP and expects a single-packet frame payload (automatically downsampled if needed).
 
-## License
-MIT. See `LICENSE`.
