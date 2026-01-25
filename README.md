@@ -103,11 +103,11 @@ py .\visualizer\pyqt_rto_viewer.py 5000 C:\path\to\params.json
 
 ## Visualizer:
 - Simulated:
-<img width="1091" height="832" alt="image" src="https://github.com/user-attachments/assets/8e4fc59f-fb62-4e2e-8561-01024858b785" />
+<img width="1088" height="827" alt="image" src="https://github.com/user-attachments/assets/3162b928-6341-4bc1-800a-2ac9be57700c" />
 
 - Real:
-  
-  <img width="605" height="730" alt="image" src="https://github.com/user-attachments/assets/719af42c-e982-4ef7-8067-2ad6ecf3b6f2" />
+
+<img width="609" height="729" alt="image" src="https://github.com/user-attachments/assets/dcebb397-7af8-4bb5-9335-adbe17e0dd59" />
 
 ## Configuration
 Back-projection uses JSON config files in `configs/backproj/`.
