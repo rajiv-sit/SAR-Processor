@@ -36,3 +36,30 @@ TEST(RtoDataBusTests, PublishReturnsTrue) {
     frame.pixels = {0.0f, 1.0f, 2.0f, 3.0f};
     EXPECT_TRUE(bus.publish(frame));
 }
+
+TEST(RtoDataBusTests, PublishReturnsFalseOnInvalidEndpoint) {
+    rto::RtoDataBus bus("udp://");
+    rto::RtoFrame frame{};
+    frame.width = 1;
+    frame.height = 1;
+    frame.pixels = {1.0f};
+    EXPECT_FALSE(bus.publish(frame));
+}
+
+TEST(RtoDataBusTests, PublishReturnsFalseOnInvalidHost) {
+    rto::RtoDataBus bus("udp://not_an_ip:4000");
+    rto::RtoFrame frame{};
+    frame.width = 1;
+    frame.height = 1;
+    frame.pixels = {1.0f};
+    EXPECT_FALSE(bus.publish(frame));
+}
+
+TEST(RtoDataBusTests, PublishWorksWithoutUdpPrefix) {
+    rto::RtoDataBus bus("127.0.0.1:5001");
+    rto::RtoFrame frame{};
+    frame.width = 1;
+    frame.height = 1;
+    frame.pixels = {1.0f};
+    EXPECT_TRUE(bus.publish(frame));
+}

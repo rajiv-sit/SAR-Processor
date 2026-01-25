@@ -40,7 +40,7 @@ std::uint16_t floatToHalf(float value) {
     if (std::isinf(value)) {
         return value < 0.0f ? 0xFC00 : 0x7C00;
     }
-    const float clamped = std::max(-65504.0f, std::min(65504.0f, value));
+    const float clamped = value;
     const std::uint32_t bits = *reinterpret_cast<const std::uint32_t*>(&clamped);
     const std::uint32_t sign = (bits >> 16) & 0x8000;
     const std::int32_t exp = static_cast<std::int32_t>((bits >> 23) & 0xFF) - 127 + 15;

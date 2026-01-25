@@ -63,3 +63,46 @@ TEST(PtaAnalyzerTests, FindPeaksReturnsTopPeaks) {
     EXPECT_EQ(peaks[0].index, 4u);
     EXPECT_DOUBLE_EQ(peaks[0].power, 2.0);
 }
+
+TEST(PtaAnalyzerTests, Analyze1DHandlesEmptyInput) {
+    pta::PtaChip chip;
+    chip.chipIn.resize(0, 0);
+
+    pta::PtaAnalyzer analyzer;
+    const auto stats = analyzer.analyze1D(chip);
+    EXPECT_DOUBLE_EQ(stats.maxPower, 0.0);
+    EXPECT_DOUBLE_EQ(stats.pos, 0.0);
+}
+
+TEST(PtaAnalyzerTests, Analyze1DReportsSideLobes) {
+    pta::PtaChip chip;
+    chip.chipIn.resize(1, 5);
+    chip.chipIn << 1.0f, 0.5f, 2.0f, 0.5f, 0.2f;
+
+    pta::PtaAnalyzer analyzer;
+    const auto stats = analyzer.analyze1D(chip);
+    EXPECT_LT(stats.mslr, 0.0);
+    EXPECT_LT(stats.islr, 0.0);
+}
+
+TEST(PtaAnalyzerTests, FindPeaksHandlesSmallInput) {
+    pta::PtaChip chip;
+    chip.chipIn.resize(1, 2);
+    chip.chipIn << 1.0f, 0.0f;
+
+    pta::PtaAnalyzer analyzer;
+    const auto peaks = analyzer.findPeaks1D(chip, 2, 1);
+    EXPECT_TRUE(peaks.empty());
+}
+
+TEST(PtaAnalyzerTests, FindPeaksFiltersBySeparationFor2D) {
+    pta::PtaChip chip;
+    chip.chipIn.resize(2, 5);
+    chip.chipIn << 0.0f, 2.0f, 0.0f, 1.5f, 0.0f,
+                   0.0f, 2.0f, 0.0f, 1.0f, 0.0f;
+
+    pta::PtaAnalyzer analyzer;
+    const auto peaks = analyzer.findPeaks1D(chip, 2, 3);
+    ASSERT_EQ(peaks.size(), 1u);
+    EXPECT_EQ(peaks[0].index, 2u);
+}

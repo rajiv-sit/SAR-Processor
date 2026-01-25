@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <string>
 #include <vector>
@@ -19,8 +20,10 @@ std::filesystem::path makeTempPath(const std::string& stem) {
     return std::filesystem::temp_directory_path() / name;
 }
 
-void truncateFile(const std::filesystem::path& path, std::uintmax_t size) {
-    std::filesystem::resize_file(path, size);
+void writeBytes(const std::filesystem::path& path, const std::vector<std::uint8_t>& bytes) {
+    std::ofstream output(path, std::ios::binary);
+    output.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
 }
 
 std::vector<float> readLineFromRpf(const std::filesystem::path& path,
@@ -325,103 +328,91 @@ TEST(RpfProductStreamLineTests, ReadLineReturnsFalseWhenOutOfRange) {
 }
 
 TEST(RpfProductStreamLineTests, ReadLineFailsOnTruncatedUint8) {
-    Eigen::MatrixXf image(1, 2);
-    image << 1.0f, 2.0f;
-    rpf::RpfWriteOptions options{};
-    options.pixelType = 0;
-    options.radarMode = 1;
     const auto path = makeTempPath("trunc_u8");
-    std::string error;
-    ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, error)) << error;
-
-    truncateFile(path, 73);
-    rpf::RpfProductStreamLine stream;
-    ASSERT_TRUE(rpf::RpfProductStreamLine::init(path.string(), 1, stream, error)) << error;
+    writeBytes(path, {0x01});
+    rpf::RpfStreamBlock block{};
+    block.path = path.string();
+    block.startLine = 1;
+    block.numLines = 1;
+    block.numPixels = 2;
+    block.pixelType = 0;
+    block.bofImgOffset = 0;
+    const auto stream = rpf::RpfProductStreamLine::makeSynthetic({block}, {});
     std::vector<float> line;
     EXPECT_FALSE(stream.readLine(1, line));
 }
 
 TEST(RpfProductStreamLineTests, ReadLineFailsOnTruncatedUint16) {
-    Eigen::MatrixXf image(1, 2);
-    image << 1.0f, 2.0f;
-    rpf::RpfWriteOptions options{};
-    options.pixelType = 1;
-    options.radarMode = 1;
     const auto path = makeTempPath("trunc_u16");
-    std::string error;
-    ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, error)) << error;
-
-    truncateFile(path, 73);
-    rpf::RpfProductStreamLine stream;
-    ASSERT_TRUE(rpf::RpfProductStreamLine::init(path.string(), 1, stream, error)) << error;
+    writeBytes(path, {0x00});
+    rpf::RpfStreamBlock block{};
+    block.path = path.string();
+    block.startLine = 1;
+    block.numLines = 1;
+    block.numPixels = 1;
+    block.pixelType = 1;
+    block.bofImgOffset = 0;
+    const auto stream = rpf::RpfProductStreamLine::makeSynthetic({block}, {});
     std::vector<float> line;
     EXPECT_FALSE(stream.readLine(1, line));
 }
 
 TEST(RpfProductStreamLineTests, ReadLineFailsOnTruncatedUint32) {
-    Eigen::MatrixXf image(1, 1);
-    image << 1.0f;
-    rpf::RpfWriteOptions options{};
-    options.pixelType = 2;
-    options.radarMode = 1;
     const auto path = makeTempPath("trunc_u32");
-    std::string error;
-    ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, error)) << error;
-
-    truncateFile(path, 74);
-    rpf::RpfProductStreamLine stream;
-    ASSERT_TRUE(rpf::RpfProductStreamLine::init(path.string(), 1, stream, error)) << error;
+    writeBytes(path, {0x00, 0x00});
+    rpf::RpfStreamBlock block{};
+    block.path = path.string();
+    block.startLine = 1;
+    block.numLines = 1;
+    block.numPixels = 1;
+    block.pixelType = 2;
+    block.bofImgOffset = 0;
+    const auto stream = rpf::RpfProductStreamLine::makeSynthetic({block}, {});
     std::vector<float> line;
     EXPECT_FALSE(stream.readLine(1, line));
 }
 
 TEST(RpfProductStreamLineTests, ReadLineFailsOnTruncatedHalf) {
-    Eigen::MatrixXf image(1, 1);
-    image << 1.0f;
-    rpf::RpfWriteOptions options{};
-    options.pixelType = 4;
-    options.radarMode = 1;
     const auto path = makeTempPath("trunc_half");
-    std::string error;
-    ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, error)) << error;
-
-    truncateFile(path, 73);
-    rpf::RpfProductStreamLine stream;
-    ASSERT_TRUE(rpf::RpfProductStreamLine::init(path.string(), 1, stream, error)) << error;
+    writeBytes(path, {0x00});
+    rpf::RpfStreamBlock block{};
+    block.path = path.string();
+    block.startLine = 1;
+    block.numLines = 1;
+    block.numPixels = 1;
+    block.pixelType = 4;
+    block.bofImgOffset = 0;
+    const auto stream = rpf::RpfProductStreamLine::makeSynthetic({block}, {});
     std::vector<float> line;
     EXPECT_FALSE(stream.readLine(1, line));
 }
 
 TEST(RpfProductStreamLineTests, ReadLineFailsOnTruncatedComplexFloat) {
-    Eigen::MatrixXf image(1, 1);
-    image << 1.0f;
-    rpf::RpfWriteOptions options{};
-    options.pixelType = 5;
-    options.radarMode = 1;
     const auto path = makeTempPath("trunc_cfloat");
-    std::string error;
-    ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, error)) << error;
-
-    truncateFile(path, 74);
-    rpf::RpfProductStreamLine stream;
-    ASSERT_TRUE(rpf::RpfProductStreamLine::init(path.string(), 1, stream, error)) << error;
+    writeBytes(path, {0x00, 0x00, 0x00, 0x00});
+    rpf::RpfStreamBlock block{};
+    block.path = path.string();
+    block.startLine = 1;
+    block.numLines = 1;
+    block.numPixels = 1;
+    block.pixelType = 5;
+    block.bofImgOffset = 0;
+    const auto stream = rpf::RpfProductStreamLine::makeSynthetic({block}, {});
     std::vector<float> line;
     EXPECT_FALSE(stream.readLine(1, line));
 }
 
 TEST(RpfProductStreamLineTests, ReadLineFailsOnTruncatedComplexHalf) {
-    Eigen::MatrixXf image(1, 1);
-    image << 1.0f;
-    rpf::RpfWriteOptions options{};
-    options.pixelType = 6;
-    options.radarMode = 1;
     const auto path = makeTempPath("trunc_chalf");
-    std::string error;
-    ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, error)) << error;
-
-    truncateFile(path, 73);
-    rpf::RpfProductStreamLine stream;
-    ASSERT_TRUE(rpf::RpfProductStreamLine::init(path.string(), 1, stream, error)) << error;
+    writeBytes(path, {0x00});
+    rpf::RpfStreamBlock block{};
+    block.path = path.string();
+    block.startLine = 1;
+    block.numLines = 1;
+    block.numPixels = 1;
+    block.pixelType = 6;
+    block.bofImgOffset = 0;
+    const auto stream = rpf::RpfProductStreamLine::makeSynthetic({block}, {});
     std::vector<float> line;
     EXPECT_FALSE(stream.readLine(1, line));
 }
