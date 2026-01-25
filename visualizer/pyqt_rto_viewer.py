@@ -8,7 +8,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 
 class UdpFrameReceiver(QtCore.QObject):
-    frame_received = QtCore.pyqtSignal(int, int, int, bytes)
+    frame_received = QtCore.pyqtSignal(bytes)
 
     def __init__(self, host: str, port: int, parent=None):
         super().__init__(parent)
@@ -23,11 +23,7 @@ class UdpFrameReceiver(QtCore.QObject):
             return
         if len(data) < 16:
             return
-        width, height, timestamp_ns = struct.unpack("<IIQ", data[:16])
-        payload = data[16:]
-        if width == 0 or height == 0:
-            return
-        self.frame_received.emit(width, height, timestamp_ns, payload)
+        self.frame_received.emit(data)
 
 
 class PyQtRtoViewer(QtWidgets.QWidget):
@@ -164,12 +160,21 @@ class PyQtRtoViewer(QtWidgets.QWidget):
         self._scale_label.setPixmap(pixmap)
         self._range_label.setText(f"Range: {min_val:.3f} to {max_val:.3f}")
 
-    def _on_frame(self, width: int, height: int, timestamp_ns: int, payload: bytes):
+    def _on_frame(self, payload: bytes):
         if self._paused:
             return
-        expected = width * height * 4
-        if len(payload) < expected:
+        if len(payload) < 16:
             return
+
+        width, height, timestamp_ns = struct.unpack("<IIQ", payload[:16])
+        endian = "<"
+        expected = width * height * 4
+        if width == 0 or height == 0 or len(payload) < 16 + expected:
+            width, height, timestamp_ns = struct.unpack(">IIQ", payload[:16])
+            endian = ">"
+            expected = width * height * 4
+            if width == 0 or height == 0 or len(payload) < 16 + expected:
+                return
 
         now_ns = time.time_ns()
         latency_ns = max(0, now_ns - timestamp_ns)
@@ -179,7 +184,7 @@ class PyQtRtoViewer(QtWidgets.QWidget):
         mean_latency = sum(self._latencies) / len(self._latencies)
         self._stats_label.setText(f"Latency: {mean_latency / 1e6:.2f} ms")
 
-        pixels = struct.unpack_from(f"<{width*height}f", payload)
+        pixels = struct.unpack_from(f"{endian}{width*height}f", payload, 16)
         min_val = min(pixels)
         max_val = max(pixels)
         img = QtGui.QImage(width, height, QtGui.QImage.Format_RGB32)
@@ -194,14 +199,42 @@ class PyQtRtoViewer(QtWidgets.QWidget):
         self._update_scale(min_val, max_val)
 
 
-def main() -> int:
+def _parse_args(argv: list[str]) -> tuple[str, int, str | None]:
     host = "0.0.0.0"
     port = 5000
     params_path = None
-    if len(sys.argv) > 1:
-        port = int(sys.argv[1])
-    if len(sys.argv) > 2:
-        params_path = sys.argv[2]
+    i = 1
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--host" and i + 1 < len(argv):
+            host = argv[i + 1]
+            i += 2
+            continue
+        if arg == "--port" and i + 1 < len(argv):
+            port = int(argv[i + 1])
+            i += 2
+            continue
+        if arg == "--params" and i + 1 < len(argv):
+            params_path = argv[i + 1]
+            i += 2
+            continue
+        if ":" in arg and not arg.isdigit():
+            host_part, port_part = arg.rsplit(":", 1)
+            host = host_part or host
+            port = int(port_part)
+            i += 1
+            continue
+        if arg.isdigit():
+            port = int(arg)
+            i += 1
+            continue
+        params_path = arg
+        i += 1
+    return host, port, params_path
+
+
+def main() -> int:
+    host, port, params_path = _parse_args(sys.argv)
 
     app = QtWidgets.QApplication(sys.argv)
     viewer = PyQtRtoViewer(host, port, params_path)
