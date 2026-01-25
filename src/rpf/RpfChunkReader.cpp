@@ -219,6 +219,9 @@ bool RpfChunkReader::readAnnotationChunk(AnnotationStruct& annotation, std::uint
         "fileType=" + std::to_string(fileType) +
         " radarMode=" + std::to_string(radarMode) +
         " gridLines=" + std::to_string(annotation.latLongOutput.geolocationGridNumLines);
+    if (!fileId.empty()) {
+        annotation.notes.summary += " fileId=" + fileId;
+    }
 
     nextOffset = annotationPayloadStart +
                  RpfConstants::kAnnotationHeaderSize +

@@ -169,11 +169,24 @@ bool writeRpfFile(const std::string& path,
                   const Eigen::MatrixXf& image,
                   const RpfWriteOptions& options,
                   std::string& error) {
+    const LatLongGrid emptyGrid{};
+    return writeRpfFile(path, image, options, emptyGrid, error);
+}
+
+bool writeRpfFile(const std::string& path,
+                  const Eigen::MatrixXf& image,
+                  const RpfWriteOptions& options,
+                  const LatLongGrid& grid,
+                  std::string& error) {
     if (image.rows() <= 0 || image.cols() <= 0) {
         return setError(error, "RPF writer requires a non-empty image.");
     }
     if (options.geolocationGridNumLines < 2 || options.geolocationGridNumLines > 5) {
         return setError(error, "RPF writer requires 2-5 geolocation grid lines.");
+    }
+    if (!grid.lineNumber.empty() &&
+        grid.lineNumber.size() != static_cast<std::size_t>(options.geolocationGridNumLines)) {
+        return setError(error, "RPF writer grid size does not match geolocation grid count.");
     }
 
     std::ofstream output(path, std::ios::binary);
@@ -312,23 +325,43 @@ bool writeRpfFile(const std::string& path,
 
     const std::uint16_t gridLines = options.geolocationGridNumLines;
     for (std::uint16_t i = 0; i < gridLines; ++i) {
-        const std::int32_t lineNumber =
+        std::int32_t lineNumber =
             static_cast<std::int32_t>(options.startLine) +
             static_cast<std::int32_t>(i) *
                 std::max<std::int32_t>(1, height / gridLines);
-        writeI32Be(output, lineNumber);
-        writeF32Be(output, 1.0f);
-        writeF32Be(output, 1.0f);
-        writeF32Be(output, 1.0f);
+        float beginRatio = 1.0f;
+        float midRatio = 1.0f;
+        float endRatio = 1.0f;
+        double beginLat = static_cast<double>(i);
+        double beginLon = static_cast<double>(i);
+        double midLat = beginLat + 0.5;
+        double midLon = beginLon + 0.5;
+        double endLat = beginLat + 1.0;
+        double endLon = beginLon + 1.0;
 
-        const double lat = static_cast<double>(i);
-        const double lon = static_cast<double>(i);
-        writeF64Be(output, lat);
-        writeF64Be(output, lon);
-        writeF64Be(output, lat + 0.5);
-        writeF64Be(output, lon + 0.5);
-        writeF64Be(output, lat + 1.0);
-        writeF64Be(output, lon + 1.0);
+        if (!grid.lineNumber.empty()) {
+            lineNumber = grid.lineNumber[i];
+            beginRatio = static_cast<float>(grid.beginGrSrRatio[i]);
+            midRatio = static_cast<float>(grid.midGrSrRatio[i]);
+            endRatio = static_cast<float>(grid.endGrSrRatio[i]);
+            beginLat = grid.beginLatitude[i];
+            beginLon = grid.beginLongitude[i];
+            midLat = grid.midLatitude[i];
+            midLon = grid.midLongitude[i];
+            endLat = grid.endLatitude[i];
+            endLon = grid.endLongitude[i];
+        }
+
+        writeI32Be(output, lineNumber);
+        writeF32Be(output, beginRatio);
+        writeF32Be(output, midRatio);
+        writeF32Be(output, endRatio);
+        writeF64Be(output, beginLat);
+        writeF64Be(output, beginLon);
+        writeF64Be(output, midLat);
+        writeF64Be(output, midLon);
+        writeF64Be(output, endLat);
+        writeF64Be(output, endLon);
         written += 64u;
     }
 

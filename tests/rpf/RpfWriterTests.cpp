@@ -6,6 +6,7 @@
 
 #include <Eigen/Core>
 
+#include "rpf/LatLongGrid.hpp"
 #include "rpf/RpfWriter.hpp"
 
 TEST(RpfWriterTests, RejectsEmptyImage) {
@@ -59,5 +60,29 @@ TEST(RpfWriterTests, WritesHalfWithSubnormalValue) {
     const auto path = std::filesystem::temp_directory_path() / "rpf_half_subnormal.rpf";
     std::string error;
     ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, error)) << error;
+    EXPECT_TRUE(std::filesystem::exists(path));
+}
+
+TEST(RpfWriterTests, WritesGeoGridWhenProvided) {
+    Eigen::MatrixXf image(2, 2);
+    image << 1.0f, 2.0f,
+             3.0f, 4.0f;
+    rpf::RpfWriteOptions options{};
+    options.geolocationGridNumLines = 2;
+    rpf::LatLongGrid grid{};
+    grid.lineNumber = {1, 2};
+    grid.beginGrSrRatio = {1.0, 1.0};
+    grid.midGrSrRatio = {1.0, 1.0};
+    grid.endGrSrRatio = {1.0, 1.0};
+    grid.beginLatitude = {10.0, 11.0};
+    grid.beginLongitude = {20.0, 21.0};
+    grid.midLatitude = {10.5, 11.5};
+    grid.midLongitude = {20.5, 21.5};
+    grid.endLatitude = {11.0, 12.0};
+    grid.endLongitude = {21.0, 22.0};
+
+    const auto path = std::filesystem::temp_directory_path() / "rpf_writer_grid.rpf";
+    std::string error;
+    ASSERT_TRUE(rpf::writeRpfFile(path.string(), image, options, grid, error)) << error;
     EXPECT_TRUE(std::filesystem::exists(path));
 }

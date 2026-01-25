@@ -53,6 +53,8 @@ TEST(RpfAutomationTests, WritesAnnotationReportJson) {
     EXPECT_EQ(json.value("radarMode", 0), 3);
     EXPECT_EQ(json.value("geolocationGridNumLines", 0), 2);
     EXPECT_EQ(json.value("latLongGridCount", 0), 2);
+    EXPECT_TRUE(json.contains("imageRect"));
+    EXPECT_TRUE(json.contains("acquisition"));
     EXPECT_DOUBLE_EQ(json["ptaStats"]["x"].value("maxPower", 0.0), 5.0);
     EXPECT_DOUBLE_EQ(json["ptaStats"]["y"].value("maxPower", 0.0), 7.0);
 }
@@ -65,6 +67,28 @@ TEST(RpfAutomationTests, WritesStripmapLinesJson) {
     const auto json = readJson(path);
     ASSERT_TRUE(json.contains("lines"));
     EXPECT_EQ(json["lines"].size(), 3u);
+    EXPECT_EQ(json.value("count", 0u), 3u);
+}
+
+TEST(RpfAutomationTests, WritesAutoPtaReportJson) {
+    const auto path = makeTempPath("rpf_auto_pta");
+    rpf::AnnotationStruct annotation{};
+    annotation.fileName = "auto.rpf";
+    annotation.fileIdParams.radarMode = 2;
+    annotation.fileIdParams.fileType = 1;
+
+    rpf::RpfAutomation automation;
+    rpf::RpfAutomation::AutoPtaEntry entry{};
+    entry.line = 5;
+    entry.xStats.maxPower = 4.0;
+    entry.yStats.maxPower = 6.0;
+    ASSERT_TRUE(automation.writeAutoPtaReport(path.string(), annotation, {entry}));
+
+    const auto json = readJson(path);
+    EXPECT_EQ(json.value("fileName", ""), "auto.rpf");
+    ASSERT_TRUE(json.contains("entries"));
+    EXPECT_EQ(json["entries"].size(), 1u);
+    EXPECT_DOUBLE_EQ(json["entries"][0]["x"].value("maxPower", 0.0), 4.0);
 }
 
 TEST(RpfAutomationTests, FailsWhenReportPathInvalid) {

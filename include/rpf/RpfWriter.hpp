@@ -5,6 +5,8 @@
 
 #include <Eigen/Core>
 
+#include "rpf/LatLongGrid.hpp"
+
 namespace rpf {
 
 struct RpfWriteOptions {
@@ -26,6 +28,11 @@ struct RpfWriteOptions {
 bool writeRpfFile(const std::string& path,
                   const Eigen::MatrixXf& image,
                   const RpfWriteOptions& options,
+                  std::string& error);
+bool writeRpfFile(const std::string& path,
+                  const Eigen::MatrixXf& image,
+                  const RpfWriteOptions& options,
+                  const LatLongGrid& grid,
                   std::string& error);
 
 }  // namespace rpf

@@ -30,8 +30,8 @@ TEST(TtlRunnerTests, ParsesPrsConfig) {
     ASSERT_TRUE(output);
     output << "# comment\n";
     output << "invalid_line\n";
-    output << "reportPath=" << reportPath.string() << "\n";
-    output << "reportFormat=text\n";
+    output << "ReportPath=" << reportPath.string() << "  # inline comment\n";
+    output << "ReportFormat=text\n";
     output << "chipPath=" << chipPath.string() << "\n";
     output << "maxPeaks=2\n";
     output.close();
@@ -62,6 +62,8 @@ TEST(TtlRunnerTests, WritesJsonReport) {
     output << "reportPath=" << reportPath.string() << "\n";
     output << "reportFormat=json\n";
     output << "chipData=0,1,0,2,0\n";
+    output << "powerDetection=power\n";
+    output << "useIqa=true\n";
     output.close();
 
     pta::TtlRunner runner;
@@ -74,6 +76,7 @@ TEST(TtlRunnerTests, WritesJsonReport) {
     EXPECT_EQ(payload.value("reportFormat", ""), "json");
     EXPECT_EQ(payload.value("inputConfig", ""), configPath.string());
     EXPECT_EQ(payload.value("status", ""), "ok");
+    EXPECT_TRUE(payload.contains("iqa"));
 }
 
 TEST(TtlRunnerTests, ParsesJsonConfig) {

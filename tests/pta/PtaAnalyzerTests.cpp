@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "pta/IqaAnalyzer.hpp"
 #include "pta/PtaAnalyzer.hpp"
 #include "pta/PtaChip.hpp"
 
@@ -137,6 +138,15 @@ TEST(PtaAnalyzerTests, Analyze1DWithZoomUpsamples) {
     pta::PtaAnalyzer analyzer;
     const auto result = analyzer.analyze1DWithZoom(chip);
     EXPECT_GT(result.zoomPower.size(), 4u);
+    EXPECT_GT(result.stats.maxPower, 0.0);
+    EXPECT_FALSE(result.peaks.empty());
+}
+
+TEST(PtaAnalyzerTests, IqaAnalyzerHandlesPowerDetection) {
+    pta::IqaAnalyzer analyzer;
+    pta::IqaPeakOptions options{};
+    options.powerDetection = "power";
+    const auto result = analyzer.process1DPeaks({0.0f, 2.0f, 0.0f}, options);
     EXPECT_GT(result.stats.maxPower, 0.0);
     EXPECT_FALSE(result.peaks.empty());
 }

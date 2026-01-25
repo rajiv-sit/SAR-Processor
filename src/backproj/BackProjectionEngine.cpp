@@ -4,13 +4,16 @@
 #include <array>
 #include <complex>
 #include <filesystem>
+#include <fstream>
 #include <numbers>
 #include <string>
 #include <vector>
 
 #include "backproj/FilterBank.hpp"
 #include "backproj/ImageWriter.hpp"
+#include "rpf/RpfConstants.hpp"
 #include "rpf/RpfProductStreamLine.hpp"
+#include "rpf/RpfWriter.hpp"
 
 #include <unsupported/Eigen/FFT>
 
@@ -234,6 +237,27 @@ void applyEdgeTaper(Eigen::MatrixXf& image, std::uint32_t pixels) {
     }
 }
 
+void buildFlatGrid(std::uint32_t rows, std::uint32_t cols, rpf::LatLongGrid& grid, std::uint16_t lines) {
+    if (lines < 2) {
+        lines = 2;
+    }
+    grid.lineNumber.assign(lines, 0);
+    grid.beginGrSrRatio.assign(lines, 1.0);
+    grid.midGrSrRatio.assign(lines, 1.0);
+    grid.endGrSrRatio.assign(lines, 1.0);
+    grid.beginLatitude.assign(lines, 0.0);
+    grid.beginLongitude.assign(lines, 0.0);
+    grid.midLatitude.assign(lines, 0.0);
+    grid.midLongitude.assign(lines, 0.0);
+    grid.endLatitude.assign(lines, 0.0);
+    grid.endLongitude.assign(lines, 0.0);
+    const std::uint32_t step = rows / lines;
+    for (std::uint16_t i = 0; i < lines; ++i) {
+        grid.lineNumber[i] = static_cast<int>(1 + i * std::max(1u, step));
+    }
+    (void)cols;
+}
+
 }  // namespace
 
 BackProjectionEngine::BackProjectionEngine(BackProjOperatorConfig operatorConfig,
@@ -328,6 +352,35 @@ void BackProjectionEngine::run() {
 
     const std::string basePath =
         operatorConfig_.rpfBaseFileName.empty() ? "backproj" : operatorConfig_.rpfBaseFileName;
+    const float minValue = image.minCoeff();
+    const float maxValue = image.maxCoeff();
+    {
+        std::ofstream metaOut(basePath + "_backproj_meta.json");
+        if (metaOut) {
+            metaOut << "{\n"
+                    << "  \"width\": " << image.cols() << ",\n"
+                    << "  \"height\": " << image.rows() << ",\n"
+                    << "  \"minValue\": " << minValue << ",\n"
+                    << "  \"maxValue\": " << maxValue << "\n"
+                    << "}\n";
+        }
+    }
+
+    if (operatorConfig_.outputDebugRpf) {
+        rpf::RpfWriteOptions options{};
+        options.pixelType = 2;
+        options.radarMode = rpf::RpfConstants::kLandspotMode;
+        options.fileId = basePath;
+        options.geolocationGridNumLines = 2;
+        rpf::LatLongGrid grid{};
+        buildFlatGrid(static_cast<std::uint32_t>(image.rows()),
+                      static_cast<std::uint32_t>(image.cols()),
+                      grid,
+                      options.geolocationGridNumLines);
+        std::string error;
+        (void)rpf::writeRpfFile(basePath + "_backproj.rpf", image, options, grid, error);
+    }
+
     if (!registrationManager_.results().empty()) {
         registrationManager_.saveJson(basePath + "_registration.json");
     }

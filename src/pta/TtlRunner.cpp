@@ -12,6 +12,7 @@
 
 #include <Eigen/Core>
 
+#include "pta/IqaAnalyzer.hpp"
 #include "pta/PtaAnalyzer.hpp"
 #include "pta/PtaHistogram.hpp"
 
@@ -35,22 +36,30 @@ struct TtlConfig {
     std::string powerDetection;
     std::string sideLobeMethod;
     bool analyze2D = false;
+    bool useIqa = false;
 };
 
 std::unordered_map<std::string, std::string> readKeyValueConfig(std::ifstream& input) {
     std::unordered_map<std::string, std::string> config;
     std::string line;
     while (std::getline(input, line)) {
-        if (line.empty() || line[0] == '#' || line[0] == '%') {
+        const auto commentPos = line.find_first_of("#%");
+        if (commentPos != std::string::npos) {
+            line = line.substr(0, commentPos);
+        }
+        line = trim(line);
+        if (line.empty()) {
             continue;
         }
         const auto eq = line.find('=');
         if (eq == std::string::npos) {
             continue;
         }
-        const std::string key = line.substr(0, eq);
-        const std::string value = line.substr(eq + 1);
+        std::string key = trim(line.substr(0, eq));
+        const std::string value = trim(line.substr(eq + 1));
         if (!key.empty()) {
+            std::transform(key.begin(), key.end(), key.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             config[key] = value;
         }
     }
@@ -183,34 +192,37 @@ TtlConfig loadConfig(std::ifstream& input, const std::string& path) {
         input.clear();
         input.seekg(0);
         const auto kv = readKeyValueConfig(input);
-        const auto reportIt = kv.find("reportPath");
+        const auto reportIt = kv.find("reportpath");
         if (reportIt != kv.end()) {
             config.reportPath = reportIt->second;
         }
-        const auto formatIt = kv.find("reportFormat");
+        const auto formatIt = kv.find("reportformat");
         if (formatIt != kv.end()) {
             config.reportFormat = formatIt->second;
         }
-        const auto chipPathIt = kv.find("chipPath");
+        const auto chipPathIt = kv.find("chippath");
         if (chipPathIt != kv.end()) {
             config.chipPath = chipPathIt->second;
         }
-        const auto chipDataIt = kv.find("chipData");
+        const auto chipDataIt = kv.find("chipdata");
         if (chipDataIt != kv.end()) {
             config.chipData = parseInlineData(chipDataIt->second);
         }
-        config.chipRows = parseInt(kv.count("chipRows") ? kv.at("chipRows") : "", config.chipRows);
-        config.chipCols = parseInt(kv.count("chipCols") ? kv.at("chipCols") : "", config.chipCols);
-        config.maxPeaks = parseSize(kv.count("maxPeaks") ? kv.at("maxPeaks") : "", config.maxPeaks);
-        config.minSeparation = parseSize(kv.count("minSeparation") ? kv.at("minSeparation") : "", config.minSeparation);
-        config.histogramBins = parseSize(kv.count("histogramBins") ? kv.at("histogramBins") : "", config.histogramBins);
-        config.fftSize = parseSize(kv.count("fftSize") ? kv.at("fftSize") : "", config.fftSize);
+        config.chipRows = parseInt(kv.count("chiprows") ? kv.at("chiprows") : "", config.chipRows);
+        config.chipCols = parseInt(kv.count("chipcols") ? kv.at("chipcols") : "", config.chipCols);
+        config.maxPeaks = parseSize(kv.count("maxpeaks") ? kv.at("maxpeaks") : "", config.maxPeaks);
+        config.minSeparation =
+            parseSize(kv.count("minseparation") ? kv.at("minseparation") : "", config.minSeparation);
+        config.histogramBins =
+            parseSize(kv.count("histogrambins") ? kv.at("histogrambins") : "", config.histogramBins);
+        config.fftSize = parseSize(kv.count("fftsize") ? kv.at("fftsize") : "", config.fftSize);
         config.magFactor = static_cast<std::uint32_t>(
-            parseSize(kv.count("magFactor") ? kv.at("magFactor") : "", config.magFactor));
-        config.zpAlpha = parseDouble(kv.count("zpAlpha") ? kv.at("zpAlpha") : "", config.zpAlpha);
-        config.powerDetection = kv.count("powerDetection") ? kv.at("powerDetection") : "";
-        config.sideLobeMethod = kv.count("sideLobeMethod") ? kv.at("sideLobeMethod") : "";
-        config.analyze2D = parseBool(kv.count("analyze2D") ? kv.at("analyze2D") : "", config.analyze2D);
+            parseSize(kv.count("magfactor") ? kv.at("magfactor") : "", config.magFactor));
+        config.zpAlpha = parseDouble(kv.count("zpalpha") ? kv.at("zpalpha") : "", config.zpAlpha);
+        config.powerDetection = kv.count("powerdetection") ? kv.at("powerdetection") : "";
+        config.sideLobeMethod = kv.count("sidelobemethod") ? kv.at("sidelobemethod") : "";
+        config.analyze2D = parseBool(kv.count("analyze2d") ? kv.at("analyze2d") : "", config.analyze2D);
+        config.useIqa = parseBool(kv.count("useiqa") ? kv.at("useiqa") : "", config.useIqa);
     }
 
     return config;
@@ -237,6 +249,27 @@ Eigen::MatrixXf buildChipMatrix(const TtlConfig& config,
         chip(0, static_cast<int>(i)) = data[i];
     }
     return chip;
+}
+
+std::vector<float> flattenChip(const Eigen::MatrixXf& chip) {
+    std::vector<float> data;
+    if (chip.size() == 0) {
+        return data;
+    }
+    if (chip.rows() == 1 || chip.cols() == 1) {
+        data.reserve(static_cast<std::size_t>(chip.size()));
+        for (int i = 0; i < chip.size(); ++i) {
+            data.push_back(chip(i));
+        }
+        return data;
+    }
+    data.assign(static_cast<std::size_t>(chip.cols()), 0.0f);
+    for (int row = 0; row < chip.rows(); ++row) {
+        for (int col = 0; col < chip.cols(); ++col) {
+            data[static_cast<std::size_t>(col)] += chip(row, col);
+        }
+    }
+    return data;
 }
 
 }  // namespace
@@ -268,6 +301,8 @@ bool TtlRunner::runFromConfig(const std::string& path) {
     PtaAnalyzer::PtaAnalysisResult analysis{};
     std::pair<PtaStats, PtaStats> stats2d{};
     PtaHistogram hist{};
+    IqaAnalyzer iqaAnalyzer;
+    IqaPeakResult iqaResult{};
     std::string status = "no_input";
 
     if (!chipData.empty()) {
@@ -284,6 +319,18 @@ bool TtlRunner::runFromConfig(const std::string& path) {
         }
         hist = generateHistogram(analysis.zoomPower,
                                  std::max<std::size_t>(1, config.histogramBins));
+        if (config.useIqa || !config.powerDetection.empty() || !config.sideLobeMethod.empty()) {
+            IqaPeakOptions iqaOptions{};
+            iqaOptions.maxPeaks = config.maxPeaks;
+            iqaOptions.minSeparation = config.minSeparation;
+            iqaOptions.fftSize = config.fftSize;
+            iqaOptions.magFactor = config.magFactor;
+            iqaOptions.zpAlpha = config.zpAlpha;
+            iqaOptions.powerDetection = config.powerDetection;
+            iqaOptions.sideLobeMethod = config.sideLobeMethod;
+            const auto profile = flattenChip(chip.chipIn);
+            iqaResult = iqaAnalyzer.process1DPeaks(profile, iqaOptions);
+        }
         status = "ok";
     }
 
@@ -320,6 +367,21 @@ bool TtlRunner::runFromConfig(const std::string& path) {
         for (const auto& peak : analysis.peaks) {
             payload["peaks"].push_back({{"index", peak.index}, {"power", peak.power}});
         }
+        if (!iqaResult.zoomPower.empty() || !iqaResult.peaks.empty()) {
+            payload["iqa"] = {
+                {"powerDetection", config.powerDetection},
+                {"sideLobeMethod", config.sideLobeMethod},
+                {"stats", {{"irw", iqaResult.stats.irw},
+                           {"mslr", iqaResult.stats.mslr},
+                           {"islr", iqaResult.stats.islr},
+                           {"pos", iqaResult.stats.pos},
+                           {"maxPower", iqaResult.stats.maxPower}}},
+                {"peaks", nlohmann::json::array()}
+            };
+            for (const auto& peak : iqaResult.peaks) {
+                payload["iqa"]["peaks"].push_back({{"index", peak.index}, {"power", peak.power}});
+            }
+        }
         payload["histogram"] = {
             {"min", hist.minValue},
             {"max", hist.maxValue},
@@ -340,6 +402,16 @@ bool TtlRunner::runFromConfig(const std::string& path) {
         report << "pos=" << analysis.stats.pos << '\n';
         report << "maxPower=" << analysis.stats.maxPower << '\n';
         report << "peakCount=" << analysis.peaks.size() << '\n';
+        if (!iqaResult.zoomPower.empty() || !iqaResult.peaks.empty()) {
+            report << "iqa.powerDetection=" << config.powerDetection << '\n';
+            report << "iqa.sideLobeMethod=" << config.sideLobeMethod << '\n';
+            report << "iqa.irw=" << iqaResult.stats.irw << '\n';
+            report << "iqa.mslr=" << iqaResult.stats.mslr << '\n';
+            report << "iqa.islr=" << iqaResult.stats.islr << '\n';
+            report << "iqa.pos=" << iqaResult.stats.pos << '\n';
+            report << "iqa.maxPower=" << iqaResult.stats.maxPower << '\n';
+            report << "iqa.peakCount=" << iqaResult.peaks.size() << '\n';
+        }
     }
     return true;
 }

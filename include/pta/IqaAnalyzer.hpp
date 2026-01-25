@@ -1,0 +1,35 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "pta/PtaPeak.hpp"
+#include "pta/PtaStats.hpp"
+
+namespace pta {
+
+struct IqaPeakOptions {
+    std::size_t maxPeaks = 4;
+    std::size_t minSeparation = 1;
+    std::size_t fftSize = 0;
+    std::uint32_t magFactor = 1;
+    double zpAlpha = 0.0;
+    std::string powerDetection;
+    std::string sideLobeMethod;
+};
+
+struct IqaPeakResult {
+    PtaStats stats{};
+    std::vector<PtaPeak> peaks;
+    std::vector<float> zoomPower;
+};
+
+class IqaAnalyzer {
+public:
+    IqaPeakResult process1DPeaks(const std::vector<float>& data,
+                                 const IqaPeakOptions& options) const;
+};
+
+}  // namespace pta

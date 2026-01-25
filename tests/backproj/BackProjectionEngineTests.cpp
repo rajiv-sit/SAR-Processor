@@ -26,6 +26,7 @@ TEST(BackProjectionEngineTests, WritesOutputWhenConfigured) {
     op.nPixY = 3;
     const auto prefix = makeTempPrefix("backproj");
     op.rpfBaseFileName = prefix.string();
+    op.outputDebugRpf = true;
 
     backproj::BackProjSecondaryConfig secondary{};
     secondary.rngFilterParams.windowCoef = 0.54;
@@ -36,6 +37,8 @@ TEST(BackProjectionEngineTests, WritesOutputWhenConfigured) {
 
     const auto path = prefix.string() + "_backproj.tif";
     EXPECT_TRUE(std::filesystem::exists(path));
+    EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_backproj_meta.json"));
+    EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_backproj.rpf"));
     EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_registration.json"));
     EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_autofocus.json"));
 }
