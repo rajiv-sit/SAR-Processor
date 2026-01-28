@@ -96,6 +96,15 @@ BackProjSecondaryConfig BackProjConfigLoader::loadSecondaryConfig(const std::str
     config.frameRegistrationParams.detPow =
         json.value("frameRegistrationParams", nlohmann::json{}).value("detPow", 0.0);
 
+    config.autofocusParams.selectionMethod =
+        json.value("autofocusParams", nlohmann::json{}).value("selectionMethod", "");
+    config.autofocusParams.minMetricDelta =
+        json.value("autofocusParams", nlohmann::json{}).value("minMetricDelta", 0.0);
+    config.autofocusParams.maxPoints =
+        json.value("autofocusParams", nlohmann::json{}).value("maxPoints", 16u);
+    config.autofocusParams.maxFrames =
+        json.value("autofocusParams", nlohmann::json{}).value("maxFrames", 0u);
+
     config.rgCompMode = json.value("rgCompMode", "");
     config.blockSizeInBytes = json.value("blockSizeInBytes", 0u);
     config.nExtraRngSamps = json.value("nExtraRngSamps", 0u);

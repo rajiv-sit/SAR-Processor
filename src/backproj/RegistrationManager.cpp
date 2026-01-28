@@ -49,9 +49,15 @@ void RegistrationManager::reset() {
 RegistrationResult RegistrationManager::registerFrame(Eigen::MatrixXf& image, bool applyShiftFlag) {
     RegistrationResult result{};
     result.frameIndex = frameIndex_++;
+    if (!results_.empty()) {
+        result.cumulativeDx = results_.back().cumulativeDx;
+        result.cumulativeDy = results_.back().cumulativeDy;
+    }
 
     const double total = image.cwiseAbs().sum();
     if (total <= 0.0) {
+        result.referenceX = refX_;
+        result.referenceY = refY_;
         results_.push_back(result);
         return result;
     }
@@ -73,6 +79,8 @@ RegistrationResult RegistrationManager::registerFrame(Eigen::MatrixXf& image, bo
         hasReference_ = true;
         refX_ = cx;
         refY_ = cy;
+        result.referenceX = refX_;
+        result.referenceY = refY_;
         results_.push_back(result);
         return result;
     }
@@ -82,6 +90,10 @@ RegistrationResult RegistrationManager::registerFrame(Eigen::MatrixXf& image, bo
     result.dx = static_cast<std::int32_t>(std::lround(-dx));
     result.dy = static_cast<std::int32_t>(std::lround(-dy));
     result.metric = std::hypot(dx, dy);
+    result.cumulativeDx += result.dx;
+    result.cumulativeDy += result.dy;
+    result.referenceX = refX_;
+    result.referenceY = refY_;
 
     if (applyShiftFlag && params_.preShiftImageGrid) {
         applyShift(image, result.dx, result.dy);
@@ -115,6 +127,10 @@ bool RegistrationManager::saveJson(const std::string& path) const {
             {"frameIndex", result.frameIndex},
             {"dx", result.dx},
             {"dy", result.dy},
+            {"cumulativeDx", result.cumulativeDx},
+            {"cumulativeDy", result.cumulativeDy},
+            {"referenceX", result.referenceX},
+            {"referenceY", result.referenceY},
             {"metric", result.metric}
         });
     }

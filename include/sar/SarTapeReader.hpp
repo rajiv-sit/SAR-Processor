@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "sar/ISarTapeReader.hpp"
 #include "sar/SarSceneHeader.hpp"
 #include "sar/SarTraceRecord.hpp"
 
@@ -17,7 +18,7 @@ struct SarTargetPositionMessage {
     std::string targetLat;
 };
 
-class SarTapeReader {
+class SarTapeReader : public ISarTapeReader {
 public:
     explicit SarTapeReader(const std::string& path);
     ~SarTapeReader();
@@ -28,12 +29,12 @@ public:
     SarTapeReader(SarTapeReader&&) noexcept = default;
     SarTapeReader& operator=(SarTapeReader&&) noexcept = default;
 
-    bool isOpen() const;
-    bool readRecord(SarTraceRecord& record);
-    bool hasSceneHeader() const;
-    const SarSceneHeader& sceneHeader() const;
-    bool hasAccessoryRecord() const;
-    const std::vector<SarTargetPositionMessage>& targetPositionMessages() const;
+    bool isOpen() const override;
+    bool readRecord(SarTraceRecord& record) override;
+    bool hasSceneHeader() const override;
+    const SarSceneHeader& sceneHeader() const override;
+    bool hasAccessoryRecord() const override;
+    const std::vector<SarTargetPositionMessage>& targetPositionMessages() const override;
 
 private:
     bool ensureAccessoryParsed();

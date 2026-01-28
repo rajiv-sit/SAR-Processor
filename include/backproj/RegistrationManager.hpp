@@ -14,6 +14,10 @@ struct RegistrationResult {
     std::int32_t frameIndex = 0;
     std::int32_t dx = 0;
     std::int32_t dy = 0;
+    std::int32_t cumulativeDx = 0;
+    std::int32_t cumulativeDy = 0;
+    double referenceX = 0.0;
+    double referenceY = 0.0;
     double metric = 0.0;
 };
 

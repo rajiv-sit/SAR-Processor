@@ -3,38 +3,148 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <thread>
 
 #include <Eigen/Dense>
+#include <nlohmann/json.hpp>
 
 #include "backproj/BackProjConfigLoader.hpp"
 #include "backproj/BackProjectionEngine.hpp"
 #include "pta/PtaAnalyzer.hpp"
-#include "rpf/RpfProductStream.hpp"
 #include "rto/RtoDataBus.hpp"
+#include "sar/SarTapeIngestPipeline.hpp"
+#include "sar/SarTapeToRpf.hpp"
 
 namespace app {
+
+namespace {
+
+std::string readEnv(const char* name) {
+    const char* value = std::getenv(name);
+    return value ? std::string(value) : std::string();
+}
+
+std::uint32_t parseEnvU32(const char* name, std::uint32_t fallback) {
+    const std::string value = readEnv(name);
+    if (value.empty()) {
+        return fallback;
+    }
+    try {
+        const auto parsed = static_cast<std::uint32_t>(std::stoul(value));
+        return parsed;
+    } catch (...) {
+        return fallback;
+    }
+}
+
+pta::PtaChip buildCenterChip(const Eigen::MatrixXf& image, int rows, int cols) {
+    pta::PtaChip chip{};
+    if (image.size() == 0) {
+        return chip;
+    }
+    const int imgRows = static_cast<int>(image.rows());
+    const int imgCols = static_cast<int>(image.cols());
+    const int useRows = std::max<int>(1, std::min<int>(rows, imgRows));
+    const int useCols = std::max<int>(1, std::min<int>(cols, imgCols));
+    const int startRow = std::max<int>(0, (imgRows - useRows) / 2);
+    const int startCol = std::max<int>(0, (imgCols - useCols) / 2);
+    chip.chipIn = image.block(startRow, startCol, useRows, useCols);
+    return chip;
+}
+
+}  // namespace
 
 bool PipelineRunner::run() {
     backproj::BackProjConfigLoader loader;
     auto operatorConfig = loader.loadOperatorConfig("configs/backproj/operator.json");
     auto secondaryConfig = loader.loadSecondaryConfig("configs/backproj/secondary.json");
 
-    backproj::BackProjectionEngine backprojEngine(operatorConfig, secondaryConfig);
-    backprojEngine.run();
+    const std::filesystem::path outputDir =
+        readEnv("SAR_PIPELINE_OUTPUT_DIR").empty()
+            ? std::filesystem::path("output")
+            : std::filesystem::path(readEnv("SAR_PIPELINE_OUTPUT_DIR"));
+    std::filesystem::create_directories(outputDir);
 
-    rpf::RpfProductStream stream("data/rpf/sample.rpf");
-    rpf::AnnotationStruct annotation{};
-    rpf::LatLongGrid grid{};
-    stream.nextBlock(annotation, grid, true);
+    std::string outputPrefix = readEnv("SAR_PIPELINE_OUTPUT_PREFIX");
+    if (outputPrefix.empty()) {
+        outputPrefix = (outputDir / "sartape_output").string();
+    }
+
+    const std::string sarTapePath = readEnv("SAR_PIPELINE_SARTAPE");
+    std::string rpfPath = readEnv("SAR_PIPELINE_RPF");
+
+    if (!sarTapePath.empty()) {
+        sar::IngestOptions options{};
+        options.errorPolicy = sar::ErrorPolicy::kFatal;
+        options.outputComplexIq = false;
+
+        sar::SarTapeIngestPipeline pipeline(sarTapePath, outputPrefix, options);
+        const auto lines = pipeline.run();
+        if (lines == 0) {
+            return false;
+        }
+
+        if (rpfPath.empty()) {
+            rpfPath = outputPrefix + ".rpf";
+        }
+
+        const std::uint32_t maxLines = parseEnvU32("SAR_PIPELINE_MAX_LINES", 0);
+        std::string error;
+        if (!sar::writeRpfFromSarTape(sarTapePath, rpfPath, maxLines, error)) {
+            return false;
+        }
+    }
+
+    if (rpfPath.empty() && !operatorConfig.inputFileName.empty()) {
+        std::filesystem::path inputPath = operatorConfig.inputFileName;
+        if (!operatorConfig.inputFilePath.empty()) {
+            inputPath = std::filesystem::path(operatorConfig.inputFilePath) / operatorConfig.inputFileName;
+        }
+        rpfPath = inputPath.string();
+    }
+
+    if (!rpfPath.empty()) {
+        const std::filesystem::path inputPath = rpfPath;
+        operatorConfig.inputFilePath = inputPath.has_parent_path()
+                                           ? inputPath.parent_path().string()
+                                           : std::string();
+        operatorConfig.inputFileName = inputPath.filename().string();
+    }
+
+    operatorConfig.rpfBaseFileName = (outputDir / "pipeline").string();
+
+    backproj::BackProjectionEngine backprojEngine(operatorConfig, secondaryConfig);
+    const Eigen::MatrixXf image = backprojEngine.runWithOutputs();
+    if (image.size() == 0) {
+        return false;
+    }
 
     pta::PtaAnalyzer analyzer;
-    pta::PtaChip chip{};
-    analyzer.analyze1D(chip);
+    const std::uint32_t chipSize = parseEnvU32("SAR_PIPELINE_PTA_CHIP", 128);
+    pta::PtaChip chip = buildCenterChip(image,
+                                        static_cast<int>(chipSize),
+                                        static_cast<int>(chipSize));
+    auto analysis = analyzer.analyze1DWithZoom(chip, 0);
 
-    rto::RtoDataBus bus("ipc://rto");
-    rto::RtoFrame frame{};
-    bus.publish(frame);
+    nlohmann::json report;
+    report["imageRows"] = image.rows();
+    report["imageCols"] = image.cols();
+    report["pta"]["irw"] = analysis.stats.irw;
+    report["pta"]["mslr"] = analysis.stats.mslr;
+    report["pta"]["islr"] = analysis.stats.islr;
+    report["pta"]["pos"] = analysis.stats.pos;
+    report["pta"]["maxPower"] = analysis.stats.maxPower;
+    for (const auto& peak : analysis.peaks) {
+        report["pta"]["peaks"].push_back({{"index", peak.index}, {"power", peak.power}});
+    }
+
+    std::ofstream reportOut(outputDir / "pta_report.json");
+    if (reportOut) {
+        reportOut << report.dump(2) << "\n";
+    }
 
     return true;
 }

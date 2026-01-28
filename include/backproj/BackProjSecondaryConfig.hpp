@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+#include "backproj/AutofocusParams.hpp"
+
 namespace backproj {
 
 struct FilterParams {
@@ -37,6 +39,7 @@ struct BackProjSecondaryConfig {
     FilterParams azmFilterParams;
     QuadTreeParams quadParams;
     FrameRegistrationParams frameRegistrationParams;
+    AutofocusParams autofocusParams;
     std::string rgCompMode;
     std::uint32_t blockSizeInBytes = 0;
     std::uint32_t nExtraRngSamps = 0;

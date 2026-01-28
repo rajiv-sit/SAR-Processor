@@ -90,8 +90,84 @@ void applyStcRamp(Eigen::MatrixXcf& data) {
     }
 }
 
+Eigen::MatrixXf collapseColumns(const Eigen::MatrixXf& input, std::uint32_t factor) {
+    if (factor <= 1 || input.size() == 0) {
+        return input;
+    }
+    const int outCols = static_cast<int>(input.cols() / static_cast<int>(factor));
+    if (outCols <= 0) {
+        return input;
+    }
+    Eigen::MatrixXf output(input.rows(), outCols);
+    for (int row = 0; row < input.rows(); ++row) {
+        for (int col = 0; col < outCols; ++col) {
+            float sum = 0.0f;
+            const int start = col * static_cast<int>(factor);
+            for (std::uint32_t k = 0; k < factor; ++k) {
+                sum += input(row, start + static_cast<int>(k));
+            }
+            output(row, col) = sum / static_cast<float>(factor);
+        }
+    }
+    return output;
+}
+
+Eigen::MatrixXf collapseRows(const Eigen::MatrixXf& input, std::uint32_t factor) {
+    if (factor <= 1 || input.size() == 0) {
+        return input;
+    }
+    const int outRows = static_cast<int>(input.rows() / static_cast<int>(factor));
+    if (outRows <= 0) {
+        return input;
+    }
+    Eigen::MatrixXf output(outRows, input.cols());
+    for (int row = 0; row < outRows; ++row) {
+        const int start = row * static_cast<int>(factor);
+        for (int col = 0; col < input.cols(); ++col) {
+            float sum = 0.0f;
+            for (std::uint32_t k = 0; k < factor; ++k) {
+                sum += input(start + static_cast<int>(k), col);
+            }
+            output(row, col) = sum / static_cast<float>(factor);
+        }
+    }
+    return output;
+}
+
+void applyComplexTaper(Eigen::MatrixXcf& data, std::uint32_t rngTaper, std::uint32_t azTaper) {
+    if (data.size() == 0) {
+        return;
+    }
+    const int rows = data.rows();
+    const int cols = data.cols();
+    const int rng = static_cast<int>(std::min<std::uint32_t>(rngTaper, cols / 2));
+    const int az = static_cast<int>(std::min<std::uint32_t>(azTaper, rows / 2));
+    if (rng <= 0 && az <= 0) {
+        return;
+    }
+    const float pi = static_cast<float>(std::numbers::pi);
+    for (int i = 0; i < rng; ++i) {
+        const float t = static_cast<float>(i + 1) / static_cast<float>(rng + 1);
+        const float weight = 0.5f - 0.5f * std::cos(pi * t);
+        for (int row = 0; row < rows; ++row) {
+            data(row, i) *= weight;
+            data(row, cols - 1 - i) *= weight;
+        }
+    }
+    for (int i = 0; i < az; ++i) {
+        const float t = static_cast<float>(i + 1) / static_cast<float>(az + 1);
+        const float weight = 0.5f - 0.5f * std::cos(pi * t);
+        for (int col = 0; col < cols; ++col) {
+            data(i, col) *= weight;
+            data(rows - 1 - i, col) *= weight;
+        }
+    }
+}
+
 bool loadRpfInput(const BackProjOperatorConfig& config,
                   Eigen::MatrixXf& image,
+                  rpf::LatLongGrid& grid,
+                  bool& hasGrid,
                   std::string& sourcePath) {
     if (config.inputFileName.empty()) {
         return false;
@@ -155,6 +231,8 @@ bool loadRpfInput(const BackProjOperatorConfig& config,
     if (linesRead != image.rows()) {
         image.conservativeResize(linesRead, block.numPixels);
     }
+    grid = stream.latLongGrid();
+    hasGrid = !grid.lineNumber.empty();
     sourcePath = inputPath.string();
     return true;
 }
@@ -260,6 +338,90 @@ void buildFlatGrid(std::uint32_t rows, std::uint32_t cols, rpf::LatLongGrid& gri
     (void)cols;
 }
 
+struct TileLayout {
+    std::uint32_t tilesX = 1;
+    std::uint32_t tilesY = 1;
+    std::uint32_t overlap = 0;
+    std::uint32_t tileWidth = 0;
+    std::uint32_t tileHeight = 0;
+};
+
+float edgeWeight(int index, int size, int overlap) {
+    if (overlap <= 0) {
+        return 1.0f;
+    }
+    const int distToStart = index;
+    const int distToEnd = size - 1 - index;
+    float weight = 1.0f;
+    if (distToStart < overlap) {
+        const float t = static_cast<float>(distToStart + 1) / static_cast<float>(overlap + 1);
+        weight *= 0.5f - 0.5f * std::cos(static_cast<float>(std::numbers::pi) * t);
+    }
+    if (distToEnd < overlap) {
+        const float t = static_cast<float>(distToEnd + 1) / static_cast<float>(overlap + 1);
+        weight *= 0.5f - 0.5f * std::cos(static_cast<float>(std::numbers::pi) * t);
+    }
+    return weight;
+}
+
+Eigen::MatrixXf applyTileBlend(const Eigen::MatrixXf& image,
+                               std::uint32_t tilesX,
+                               std::uint32_t tilesY,
+                               std::uint32_t overlap,
+                               TileLayout& layout) {
+    if (image.size() == 0 || tilesX == 0 || tilesY == 0) {
+        return image;
+    }
+    const int rows = image.rows();
+    const int cols = image.cols();
+    const int tileWidth = static_cast<int>((cols + static_cast<int>(tilesX) - 1) /
+                                          static_cast<int>(tilesX));
+    const int tileHeight = static_cast<int>((rows + static_cast<int>(tilesY) - 1) /
+                                           static_cast<int>(tilesY));
+    if (tileWidth <= 0 || tileHeight <= 0) {
+        return image;
+    }
+
+    layout.tilesX = tilesX;
+    layout.tilesY = tilesY;
+    layout.overlap = overlap;
+    layout.tileWidth = static_cast<std::uint32_t>(tileWidth);
+    layout.tileHeight = static_cast<std::uint32_t>(tileHeight);
+
+    Eigen::MatrixXf accum = Eigen::MatrixXf::Zero(rows, cols);
+    Eigen::MatrixXf weights = Eigen::MatrixXf::Zero(rows, cols);
+
+    for (std::uint32_t ty = 0; ty < tilesY; ++ty) {
+        for (std::uint32_t tx = 0; tx < tilesX; ++tx) {
+            const int startRow = static_cast<int>(ty) * tileHeight;
+            const int startCol = static_cast<int>(tx) * tileWidth;
+            const int endRow = std::min(rows, startRow + tileHeight);
+            const int endCol = std::min(cols, startCol + tileWidth);
+
+            for (int row = startRow; row < endRow; ++row) {
+                const int localRow = row - startRow;
+                const float wy = edgeWeight(localRow, endRow - startRow, static_cast<int>(overlap));
+                for (int col = startCol; col < endCol; ++col) {
+                    const int localCol = col - startCol;
+                    const float wx = edgeWeight(localCol, endCol - startCol, static_cast<int>(overlap));
+                    const float w = wx * wy;
+                    accum(row, col) += image(row, col) * w;
+                    weights(row, col) += w;
+                }
+            }
+        }
+    }
+
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            if (weights(row, col) > 0.0f) {
+                accum(row, col) /= weights(row, col);
+            }
+        }
+    }
+    return accum;
+}
+
 }  // namespace
 
 BackProjectionEngine::BackProjectionEngine(BackProjOperatorConfig operatorConfig,
@@ -270,11 +432,26 @@ BackProjectionEngine::BackProjectionEngine(BackProjOperatorConfig operatorConfig
 Eigen::MatrixXf BackProjectionEngine::generateImage() {
     Eigen::MatrixXf inputImage;
     std::string sourcePath;
-    const bool hasInput = loadRpfInput(operatorConfig_, inputImage, sourcePath);
-    (void)sourcePath;
+    rpf::LatLongGrid grid{};
+    bool hasGrid = false;
+    const bool hasInput = loadRpfInput(operatorConfig_, inputImage, grid, hasGrid, sourcePath);
+    lastSourcePath_ = sourcePath;
+    lastLatLongGrid_ = grid;
+    hasLatLongGrid_ = hasGrid;
 
     if (!hasInput && (operatorConfig_.nPixX == 0 || operatorConfig_.nPixY == 0)) {
         return {};
+    }
+
+    if (hasInput) {
+        if (operatorConfig_.collapseFactor > 1) {
+            inputImage = collapseColumns(inputImage, operatorConfig_.collapseFactor);
+        }
+        const std::uint32_t azFactor = static_cast<std::uint32_t>(
+            std::max(1.0, operatorConfig_.azimuthCollapseFactor));
+        if (azFactor > 1) {
+            inputImage = collapseRows(inputImage, azFactor);
+        }
     }
 
     const int baseRows = hasInput ? inputImage.rows() : static_cast<int>(operatorConfig_.nPixY);
@@ -311,6 +488,9 @@ Eigen::MatrixXf BackProjectionEngine::generateImage() {
     if (secondaryConfig_.applyStcCorrection) {
         applyStcRamp(phaseHistory);
     }
+    applyComplexTaper(phaseHistory,
+                      secondaryConfig_.quadParams.nRngTaper,
+                      secondaryConfig_.quadParams.nAzmTaper);
 
     FilterBank filters(secondaryConfig_.rngFilterParams,
                        secondaryConfig_.azmFilterParams);
@@ -334,16 +514,28 @@ Eigen::MatrixXf BackProjectionEngine::generateImage() {
     }
 
     if (operatorConfig_.applyAutoFocus) {
+        autofocusController_.configure(secondaryConfig_.autofocusParams);
         autofocusController_.analyzeFrame(image);
     }
 
     return image;
 }
 
-void BackProjectionEngine::run() {
+Eigen::MatrixXf BackProjectionEngine::runWithOutputs() {
     Eigen::MatrixXf image = generateImage();
     if (image.size() == 0) {
-        return;
+        return image;
+    }
+
+    TileLayout tileLayout{};
+    if ((operatorConfig_.numTilesX > 1 || operatorConfig_.numTilesY > 1 ||
+         secondaryConfig_.tileOverlap > 0) &&
+        operatorConfig_.numTilesX > 0 && operatorConfig_.numTilesY > 0) {
+        image = applyTileBlend(image,
+                               operatorConfig_.numTilesX,
+                               operatorConfig_.numTilesY,
+                               secondaryConfig_.tileOverlap,
+                               tileLayout);
     }
 
     std::string outputPath = "backproj_output.tif";
@@ -356,6 +548,9 @@ void BackProjectionEngine::run() {
         operatorConfig_.rpfBaseFileName.empty() ? "backproj" : operatorConfig_.rpfBaseFileName;
     const float minValue = image.minCoeff();
     const float maxValue = image.maxCoeff();
+    const float range = (maxValue > minValue) ? (maxValue - minValue) : 1.0f;
+    const double scale = 65535.0 / static_cast<double>(range);
+    const double offset = -static_cast<double>(minValue) * scale;
     {
         std::ofstream metaOut(basePath + "_backproj_meta.json");
         if (metaOut) {
@@ -363,7 +558,20 @@ void BackProjectionEngine::run() {
                     << "  \"width\": " << image.cols() << ",\n"
                     << "  \"height\": " << image.rows() << ",\n"
                     << "  \"minValue\": " << minValue << ",\n"
-                    << "  \"maxValue\": " << maxValue << "\n"
+                    << "  \"maxValue\": " << maxValue << ",\n"
+                    << "  \"scale\": " << scale << ",\n"
+                    << "  \"offset\": " << offset << ",\n"
+                    << "  \"outputProjection\": \"" << operatorConfig_.outputProjection << "\",\n"
+                    << "  \"pixelSpacing\": " << operatorConfig_.pixelSpacing << ",\n"
+                    << "  \"imageOffsetSpec\": \"" << operatorConfig_.imageOffsetSpec << "\",\n"
+                    << "  \"sourcePath\": \"" << lastSourcePath_ << "\",\n"
+                    << "  \"tileLayout\": {\n"
+                    << "    \"tilesX\": " << tileLayout.tilesX << ",\n"
+                    << "    \"tilesY\": " << tileLayout.tilesY << ",\n"
+                    << "    \"overlap\": " << tileLayout.overlap << ",\n"
+                    << "    \"tileWidth\": " << tileLayout.tileWidth << ",\n"
+                    << "    \"tileHeight\": " << tileLayout.tileHeight << "\n"
+                    << "  }\n"
                     << "}\n";
         }
     }
@@ -375,10 +583,14 @@ void BackProjectionEngine::run() {
         options.fileId = basePath;
         options.geolocationGridNumLines = 2;
         rpf::LatLongGrid grid{};
-        buildFlatGrid(static_cast<std::uint32_t>(image.rows()),
-                      static_cast<std::uint32_t>(image.cols()),
-                      grid,
-                      options.geolocationGridNumLines);
+        if (hasLatLongGrid_) {
+            grid = lastLatLongGrid_;
+        } else {
+            buildFlatGrid(static_cast<std::uint32_t>(image.rows()),
+                          static_cast<std::uint32_t>(image.cols()),
+                          grid,
+                          options.geolocationGridNumLines);
+        }
         std::string error;
         (void)rpf::writeRpfFile(basePath + "_backproj.rpf", image, options, grid, error);
     }
@@ -389,6 +601,12 @@ void BackProjectionEngine::run() {
     if (!autofocusController_.results().empty()) {
         autofocusController_.saveJson(basePath + "_autofocus.json");
     }
+
+    return image;
+}
+
+void BackProjectionEngine::run() {
+    (void)runWithOutputs();
 }
 
 }  // namespace backproj

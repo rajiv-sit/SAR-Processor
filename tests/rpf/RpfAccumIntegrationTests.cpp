@@ -15,7 +15,7 @@ namespace {
 std::filesystem::path findDataRoot() {
     std::filesystem::path current = std::filesystem::current_path();
     for (int i = 0; i < 6; ++i) {
-        const auto candidate = current / "RPFAccum1_files";
+        const auto candidate = current / "rpf" / "RPFAccum1";
         if (std::filesystem::exists(candidate)) {
             return current;
         }
@@ -29,8 +29,8 @@ std::filesystem::path findDataRoot() {
 
 std::vector<std::filesystem::path> candidateRpfPaths(const std::filesystem::path& root) {
     return {
-        root / "RPFAccum1_files" / "RpfAccum1_0001.rpf",
-        root / "FLT104_H_circle_leg4_C1_rpf" / "rpfBaseFileName_0001.rpf",
+        root / "rpf" / "RPFAccum1" / "RpfAccum1_0001.rpf",
+        root / "rpf" / "FLT104_H_circle_leg4_C1" / "rpfBaseFileName_0001.rpf",
         root / "frame1_processing" / "RpfComp1_0001.rpf",
         root / "frame1_processing" / "RpfAcFi1_0001.rpf"
     };

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "rpf/IRpfProductStreamLine.hpp"
 #include "rpf/LatLongGrid.hpp"
 
 namespace rpf {
@@ -17,7 +18,7 @@ struct RpfStreamBlock {
     std::uint32_t bofImgOffset = 0;
 };
 
-class RpfProductStreamLine {
+class RpfProductStreamLine : public IRpfProductStreamLine {
 public:
     static bool init(const std::string& fileName,
                      int frameNum,
@@ -26,11 +27,11 @@ public:
     static RpfProductStreamLine makeSynthetic(const std::vector<RpfStreamBlock>& blocks,
                                              const LatLongGrid& grid);
 
-    bool readLine(int lineNum, std::vector<float>& lineData) const;
-    bool getLatLong(int line, int pixel, double& lat, double& lon, double& grToSr) const;
+    bool readLine(int lineNum, std::vector<float>& lineData) const override;
+    bool getLatLong(int line, int pixel, double& lat, double& lon, double& grToSr) const override;
 
-    const LatLongGrid& latLongGrid() const { return latLongGrid_; }
-    const std::vector<RpfStreamBlock>& blocks() const { return blocks_; }
+    const LatLongGrid& latLongGrid() const override { return latLongGrid_; }
+    const std::vector<RpfStreamBlock>& blocks() const override { return blocks_; }
 
 private:
     std::vector<RpfStreamBlock> blocks_;

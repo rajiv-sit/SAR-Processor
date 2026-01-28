@@ -11,6 +11,8 @@
 **/conan*info*.json
 **/conan*build*.cmake
 **/conan_profiles/*
+.conan_cache/
+data/
 
 # IDE / tooling
 .vscode/
