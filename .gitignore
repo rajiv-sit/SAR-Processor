@@ -14,7 +14,9 @@ build/
 **/conan*build*.cmake
 **/conan_profiles/*
 .conan_cache/
-conan/
+conan/*
+!conan/profiles/
+!conan/profiles/*
 data/
 
 # IDE / tooling

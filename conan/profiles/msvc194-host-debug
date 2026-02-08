@@ -1,0 +1,15 @@
+[settings]
+os=Windows
+arch=x86_64
+compiler=msvc
+compiler.version=194
+compiler.runtime=dynamic
+compiler.runtime_type=Debug
+build_type=Debug
+compiler.cppstd=23
+
+[conf]
+# Conan 2 + CMake: force a generator that exists with VS 2022.
+tools.cmake.cmaketoolchain:generator=Visual Studio 17 2022
+tools.microsoft.msbuild:vs_version=17
+
