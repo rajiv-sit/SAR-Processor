@@ -20,6 +20,8 @@ data/
 # IDE / tooling
 .vscode/
 .idea/
+.clang-format
+.clang-tidy
 *.user
 *.suo
 *.vcxproj*
