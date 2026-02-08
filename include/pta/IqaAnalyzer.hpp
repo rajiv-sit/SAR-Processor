@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include <Eigen/Core>
+
 #include "pta/PtaPeak.hpp"
 #include "pta/PtaStats.hpp"
 
@@ -26,10 +28,17 @@ struct IqaPeakResult {
     std::vector<float> zoomPower;
 };
 
+struct IqaPeak2DResult {
+    IqaPeakResult x{};
+    IqaPeakResult y{};
+};
+
 class IqaAnalyzer {
 public:
     IqaPeakResult process1DPeaks(const std::vector<float>& data,
                                  const IqaPeakOptions& options) const;
+    IqaPeak2DResult process2DPeaks(const Eigen::MatrixXf& chip,
+                                   const IqaPeakOptions& options) const;
 };
 
 }  // namespace pta

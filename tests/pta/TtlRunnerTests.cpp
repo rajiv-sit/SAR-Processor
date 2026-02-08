@@ -64,6 +64,7 @@ TEST(TtlRunnerTests, WritesJsonReport) {
     output << "chipData=0,1,0,2,0\n";
     output << "powerDetection=power\n";
     output << "useIqa=true\n";
+    output << "useIqa2D=true\n";
     output.close();
 
     pta::TtlRunner runner;
@@ -77,6 +78,7 @@ TEST(TtlRunnerTests, WritesJsonReport) {
     EXPECT_EQ(payload.value("inputConfig", ""), configPath.string());
     EXPECT_EQ(payload.value("status", ""), "ok");
     EXPECT_TRUE(payload.contains("iqa"));
+    EXPECT_TRUE(payload.contains("iqa2d"));
 }
 
 TEST(TtlRunnerTests, ParsesJsonConfig) {

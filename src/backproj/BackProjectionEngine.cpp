@@ -2,9 +2,13 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <complex>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
+#include <memory>
 #include <numbers>
 #include <string>
 #include <vector>
@@ -15,11 +19,35 @@
 #include "rpf/RpfProductStreamLine.hpp"
 #include "rpf/RpfWriter.hpp"
 
-#include <unsupported/Eigen/FFT>
+#include <nlohmann/json.hpp>
 
 namespace backproj {
 
 namespace {
+
+bool profilingEnabled() {
+    static bool enabled = (std::getenv("SAR_BACKPROJ_PROFILE") != nullptr);
+    return enabled;
+}
+
+class ScopedProfiler {
+public:
+    explicit ScopedProfiler(const char* label)
+        : label_(label), start_(std::chrono::steady_clock::now()), enabled_(profilingEnabled()) {}
+
+    ~ScopedProfiler() {
+        if (enabled_) {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - start_);
+            std::cerr << "[BackProjectionEngine] " << label_ << ": " << elapsed.count() << " ms\n";
+        }
+    }
+
+private:
+    const char* label_;
+    std::chrono::steady_clock::time_point start_;
+    bool enabled_;
+};
 
 struct SyntheticTarget {
     float amplitude = 1.0f;
@@ -237,38 +265,6 @@ bool loadRpfInput(const BackProjOperatorConfig& config,
     return true;
 }
 
-void fftRows(Eigen::MatrixXcf& data) {
-    Eigen::FFT<float> fft;
-    const int cols = data.cols();
-    std::vector<std::complex<float>> in(static_cast<std::size_t>(cols));
-    std::vector<std::complex<float>> out(static_cast<std::size_t>(cols));
-    for (int row = 0; row < data.rows(); ++row) {
-        for (int col = 0; col < cols; ++col) {
-            in[static_cast<std::size_t>(col)] = data(row, col);
-        }
-        fft.fwd(out, in);
-        for (int col = 0; col < cols; ++col) {
-            data(row, col) = out[static_cast<std::size_t>(col)];
-        }
-    }
-}
-
-void fftCols(Eigen::MatrixXcf& data) {
-    Eigen::FFT<float> fft;
-    const int rows = data.rows();
-    std::vector<std::complex<float>> in(static_cast<std::size_t>(rows));
-    std::vector<std::complex<float>> out(static_cast<std::size_t>(rows));
-    for (int col = 0; col < data.cols(); ++col) {
-        for (int row = 0; row < rows; ++row) {
-            in[static_cast<std::size_t>(row)] = data(row, col);
-        }
-        fft.fwd(out, in);
-        for (int row = 0; row < rows; ++row) {
-            data(row, col) = out[static_cast<std::size_t>(row)];
-        }
-    }
-}
-
 Eigen::MatrixXf cropMagnitude(const Eigen::MatrixXcf& data, int targetRows, int targetCols) {
     if (data.size() == 0 || targetRows <= 0 || targetCols <= 0) {
         return {};
@@ -424,6 +420,44 @@ Eigen::MatrixXf applyTileBlend(const Eigen::MatrixXf& image,
 
 }  // namespace
 
+void BackProjectionEngine::fftRows(Eigen::MatrixXcf& data) {
+    if (data.size() == 0) {
+        return;
+    }
+    const int cols = data.cols();
+    const int rows = data.rows();
+    fftRowInput_.resize(static_cast<std::size_t>(cols));
+    fftRowOutput_.resize(static_cast<std::size_t>(cols));
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            fftRowInput_[static_cast<std::size_t>(col)] = data(row, col);
+        }
+        rowFft_.fwd(fftRowOutput_, fftRowInput_);
+        for (int col = 0; col < cols; ++col) {
+            data(row, col) = fftRowOutput_[static_cast<std::size_t>(col)];
+        }
+    }
+}
+
+void BackProjectionEngine::fftCols(Eigen::MatrixXcf& data) {
+    if (data.size() == 0) {
+        return;
+    }
+    const int cols = data.cols();
+    const int rows = data.rows();
+    fftColInput_.resize(static_cast<std::size_t>(rows));
+    fftColOutput_.resize(static_cast<std::size_t>(rows));
+    for (int col = 0; col < cols; ++col) {
+        for (int row = 0; row < rows; ++row) {
+            fftColInput_[static_cast<std::size_t>(row)] = data(row, col);
+        }
+        colFft_.fwd(fftColOutput_, fftColInput_);
+        for (int row = 0; row < rows; ++row) {
+            data(row, col) = fftColOutput_[static_cast<std::size_t>(row)];
+        }
+    }
+}
+
 BackProjectionEngine::BackProjectionEngine(BackProjOperatorConfig operatorConfig,
                                            BackProjSecondaryConfig secondaryConfig)
     : operatorConfig_(std::move(operatorConfig)),
@@ -434,6 +468,7 @@ Eigen::MatrixXf BackProjectionEngine::generateImage() {
     std::string sourcePath;
     rpf::LatLongGrid grid{};
     bool hasGrid = false;
+    ScopedProfiler loadTimer("load_rpf");
     const bool hasInput = loadRpfInput(operatorConfig_, inputImage, grid, hasGrid, sourcePath);
     lastSourcePath_ = sourcePath;
     lastLatLongGrid_ = grid;
@@ -443,6 +478,7 @@ Eigen::MatrixXf BackProjectionEngine::generateImage() {
         return {};
     }
 
+    ScopedProfiler phaseProfiler("phase_history");
     if (hasInput) {
         if (operatorConfig_.collapseFactor > 1) {
             inputImage = collapseColumns(inputImage, operatorConfig_.collapseFactor);
@@ -492,16 +528,25 @@ Eigen::MatrixXf BackProjectionEngine::generateImage() {
                       secondaryConfig_.quadParams.nRngTaper,
                       secondaryConfig_.quadParams.nAzmTaper);
 
-    FilterBank filters(secondaryConfig_.rngFilterParams,
-                       secondaryConfig_.azmFilterParams);
-    const auto rangeWindow = filters.rangeWindow(static_cast<std::size_t>(cols));
-    const auto azWindow = filters.azimuthWindow(static_cast<std::size_t>(rows));
-    FilterBank::applyWindow(phaseHistory, rangeWindow, true);
-    FilterBank::applyWindow(phaseHistory, azWindow, false);
+    {
+        ScopedProfiler filterTimer("filter_window");
+        FilterBank filters(secondaryConfig_.rngFilterParams,
+                           secondaryConfig_.azmFilterParams);
+        const auto rangeWindow = filters.rangeWindow(static_cast<std::size_t>(cols));
+        const auto azWindow = filters.azimuthWindow(static_cast<std::size_t>(rows));
+        FilterBank::applyWindow(phaseHistory, rangeWindow, true);
+        FilterBank::applyWindow(phaseHistory, azWindow, false);
+    }
+    {
+        ScopedProfiler fftTimer("fft_rows");
+        fftRows(phaseHistory);
+    }
+    {
+        ScopedProfiler fftTimer("fft_cols");
+        fftCols(phaseHistory);
+    }
 
-    fftRows(phaseHistory);
-    fftCols(phaseHistory);
-
+    ScopedProfiler cropProfiler("crop_magnitude");
     Eigen::MatrixXf image = cropMagnitude(phaseHistory, targetRows, targetCols);
     if (secondaryConfig_.applyAgcCorrection) {
         applyAgc(image);
@@ -538,41 +583,45 @@ Eigen::MatrixXf BackProjectionEngine::runWithOutputs() {
                                tileLayout);
     }
 
-    std::string outputPath = "backproj_output.tif";
-    if (!operatorConfig_.rpfBaseFileName.empty()) {
-        outputPath = operatorConfig_.rpfBaseFileName + "_backproj.tif";
-    }
-    writeTiff(outputPath, image);
-
     const std::string basePath =
         operatorConfig_.rpfBaseFileName.empty() ? "backproj" : operatorConfig_.rpfBaseFileName;
+    writeTiff(basePath + "_backproj.tif", image);
+    if (!operatorConfig_.fastMode) {
+        (void)writeNormalizedTiff(basePath + "_backproj_norm.tif", image, secondaryConfig_.imageScaling);
+    }
+    (void)writeRawFloat(basePath + "_backproj.raw", image);
     const float minValue = image.minCoeff();
     const float maxValue = image.maxCoeff();
     const float range = (maxValue > minValue) ? (maxValue - minValue) : 1.0f;
     const double scale = 65535.0 / static_cast<double>(range);
     const double offset = -static_cast<double>(minValue) * scale;
     {
+        nlohmann::json payload;
+        payload["width"] = image.cols();
+        payload["height"] = image.rows();
+        payload["minValue"] = minValue;
+        payload["maxValue"] = maxValue;
+        payload["scale"] = scale;
+        payload["offset"] = offset;
+        payload["outputProjection"] = operatorConfig_.outputProjection;
+        payload["pixelSpacing"] = operatorConfig_.pixelSpacing;
+        payload["imageOffsetSpec"] = operatorConfig_.imageOffsetSpec;
+        payload["sourcePath"] = [&]() {
+            std::string path = lastSourcePath_;
+            std::replace(path.begin(), path.end(), '\\', '/');
+            return path;
+        }();
+        payload["tileLayout"] = {
+            {"tilesX", tileLayout.tilesX},
+            {"tilesY", tileLayout.tilesY},
+            {"overlap", tileLayout.overlap},
+            {"tileWidth", tileLayout.tileWidth},
+            {"tileHeight", tileLayout.tileHeight}
+        };
+
         std::ofstream metaOut(basePath + "_backproj_meta.json");
         if (metaOut) {
-            metaOut << "{\n"
-                    << "  \"width\": " << image.cols() << ",\n"
-                    << "  \"height\": " << image.rows() << ",\n"
-                    << "  \"minValue\": " << minValue << ",\n"
-                    << "  \"maxValue\": " << maxValue << ",\n"
-                    << "  \"scale\": " << scale << ",\n"
-                    << "  \"offset\": " << offset << ",\n"
-                    << "  \"outputProjection\": \"" << operatorConfig_.outputProjection << "\",\n"
-                    << "  \"pixelSpacing\": " << operatorConfig_.pixelSpacing << ",\n"
-                    << "  \"imageOffsetSpec\": \"" << operatorConfig_.imageOffsetSpec << "\",\n"
-                    << "  \"sourcePath\": \"" << lastSourcePath_ << "\",\n"
-                    << "  \"tileLayout\": {\n"
-                    << "    \"tilesX\": " << tileLayout.tilesX << ",\n"
-                    << "    \"tilesY\": " << tileLayout.tilesY << ",\n"
-                    << "    \"overlap\": " << tileLayout.overlap << ",\n"
-                    << "    \"tileWidth\": " << tileLayout.tileWidth << ",\n"
-                    << "    \"tileHeight\": " << tileLayout.tileHeight << "\n"
-                    << "  }\n"
-                    << "}\n";
+            metaOut << payload.dump(2);
         }
     }
 
@@ -595,11 +644,13 @@ Eigen::MatrixXf BackProjectionEngine::runWithOutputs() {
         (void)rpf::writeRpfFile(basePath + "_backproj.rpf", image, options, grid, error);
     }
 
-    if (!registrationManager_.results().empty()) {
-        registrationManager_.saveJson(basePath + "_registration.json");
-    }
-    if (!autofocusController_.results().empty()) {
-        autofocusController_.saveJson(basePath + "_autofocus.json");
+    if (!operatorConfig_.fastMode) {
+        if (!registrationManager_.results().empty()) {
+            registrationManager_.saveJson(basePath + "_registration.json");
+        }
+        if (!autofocusController_.results().empty()) {
+            autofocusController_.saveJson(basePath + "_autofocus.json");
+        }
     }
 
     return image;

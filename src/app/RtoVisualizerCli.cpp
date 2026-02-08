@@ -1,6 +1,8 @@
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string>
 
 #include "app/PipelineRunner.hpp"
@@ -12,6 +14,8 @@ void printUsage() {
         << "Usage: rto_visualizer_cli [--endpoint udp://127.0.0.1:5000] "
            "[--width N] [--height N] [--frames N] [--interval-ms N]\n"
            "Publishes a back-projection preview frame to the RTO viewer.\n"
+           "[--shared-file <path>] writes frames to a shared memory region instead of UDP.\n"
+           "[--cached-raw <path>] loads an existing <name>_backproj.raw image instead of recomputing.\n"
            "Large images are downsampled to fit a single UDP packet.\n";
 }
 
@@ -45,6 +49,8 @@ bool readSize(const char* value, std::size_t& out) {
 
 int main(int argc, char** argv) {
     std::string endpoint = "udp://127.0.0.1:5000";
+    std::optional<std::filesystem::path> sharedFile;
+    std::optional<std::filesystem::path> cachedRaw;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     std::size_t frames = 120;
@@ -88,6 +94,14 @@ int main(int argc, char** argv) {
             }
             continue;
         }
+        if (arg == "--shared-file" && i + 1 < argc) {
+            sharedFile = std::filesystem::path(argv[++i]);
+            continue;
+        }
+        if (arg == "--cached-raw" && i + 1 < argc) {
+            cachedRaw = std::filesystem::path(argv[++i]);
+            continue;
+        }
 
         std::cerr << "Unknown argument: " << arg << "\n";
         printUsage();
@@ -95,8 +109,12 @@ int main(int argc, char** argv) {
     }
 
     app::PipelineRunner runner;
-    if (!runner.runRtoPreview(endpoint, width, height, frames, intervalMs)) {
-        std::cerr << "Failed to publish frames to " << endpoint << "\n";
+    const std::string target =
+        sharedFile ? sharedFile->string()
+                   : cachedRaw ? cachedRaw->string()
+                               : endpoint;
+    if (!runner.runRtoPreview(endpoint, sharedFile, cachedRaw, width, height, frames, intervalMs)) {
+        std::cerr << "Failed to publish frames to " << target << "\n";
         return 1;
     }
 

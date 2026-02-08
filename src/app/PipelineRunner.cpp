@@ -13,8 +13,10 @@
 
 #include "backproj/BackProjConfigLoader.hpp"
 #include "backproj/BackProjectionEngine.hpp"
+#include "backproj/ImageWriter.hpp"
 #include "pta/PtaAnalyzer.hpp"
 #include "rto/RtoDataBus.hpp"
+#include "rto/SharedFramePublisher.hpp"
 #include "sar/SarTapeIngestPipeline.hpp"
 #include "sar/SarTapeToRpf.hpp"
 
@@ -150,6 +152,8 @@ bool PipelineRunner::run() {
 }
 
 bool PipelineRunner::runRtoPreview(const std::string& endpoint,
+                                   const std::optional<std::filesystem::path>& sharedFile,
+                                   const std::optional<std::filesystem::path>& cachedRaw,
                                    std::uint32_t width,
                                    std::uint32_t height,
                                    std::size_t frames,
@@ -171,73 +175,91 @@ bool PipelineRunner::runRtoPreview(const std::string& endpoint,
     operatorConfig.nPixX = width;
     operatorConfig.nPixY = height;
 
-    backproj::BackProjectionEngine engine(operatorConfig, secondaryConfig);
-    const Eigen::MatrixXf image = engine.generateImage();
+    Eigen::MatrixXf image;
+    if (cachedRaw) {
+        if (!backproj::readRawFloat(cachedRaw->string(), image)) {
+            return false;
+        }
+    } else {
+        backproj::BackProjectionEngine engine(operatorConfig, secondaryConfig);
+        image = engine.generateImage();
+    }
     if (image.size() == 0) {
         return false;
     }
 
-    rto::RtoDataBus bus(endpoint);
-    rto::RtoFrame frame{};
-    std::uint32_t outWidth = static_cast<std::uint32_t>(image.cols());
-    std::uint32_t outHeight = static_cast<std::uint32_t>(image.rows());
-
     constexpr std::size_t kUdpMaxPayload = 65507;
-    const std::size_t maxPixels = (kUdpMaxPayload - 16) / sizeof(float);
-    const std::size_t pixelCount = static_cast<std::size_t>(outWidth) * outHeight;
-    if (pixelCount > maxPixels) {
-        const double scale = std::sqrt(static_cast<double>(maxPixels) / static_cast<double>(pixelCount));
-        outWidth = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(outWidth * scale));
-        outHeight = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(outHeight * scale));
-        while (static_cast<std::size_t>(outWidth) * outHeight > maxPixels) {
-            if (outWidth >= outHeight && outWidth > 1) {
-                --outWidth;
-            } else if (outHeight > 1) {
-                --outHeight;
-            } else {
-                break;
+    auto buildFrame = [&](rto::RtoFrame& frame) {
+        std::uint32_t outWidth = static_cast<std::uint32_t>(image.cols());
+        std::uint32_t outHeight = static_cast<std::uint32_t>(image.rows());
+        const std::size_t maxPixels = (kUdpMaxPayload - 16) / sizeof(float);
+        const std::size_t pixelCount = static_cast<std::size_t>(outWidth) * outHeight;
+        if (pixelCount > maxPixels) {
+            const double scale = std::sqrt(static_cast<double>(maxPixels) / static_cast<double>(pixelCount));
+            outWidth = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(outWidth * scale));
+            outHeight = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(outHeight * scale));
+            while (static_cast<std::size_t>(outWidth) * outHeight > maxPixels) {
+                if (outWidth >= outHeight && outWidth > 1) {
+                    --outWidth;
+                } else if (outHeight > 1) {
+                    --outHeight;
+                } else {
+                    break;
+                }
             }
         }
-    }
 
-    frame.width = outWidth;
-    frame.height = outHeight;
-    frame.pixels.resize(static_cast<std::size_t>(frame.width) * frame.height);
-    if (outWidth == static_cast<std::uint32_t>(image.cols()) &&
-        outHeight == static_cast<std::uint32_t>(image.rows())) {
-        for (int row = 0; row < image.rows(); ++row) {
-            for (int col = 0; col < image.cols(); ++col) {
-                frame.pixels[static_cast<std::size_t>(row) * frame.width + col] = image(row, col);
+        frame.width = outWidth;
+        frame.height = outHeight;
+        frame.pixels.resize(static_cast<std::size_t>(frame.width) * frame.height);
+        if (outWidth == static_cast<std::uint32_t>(image.cols()) &&
+            outHeight == static_cast<std::uint32_t>(image.rows())) {
+            for (int row = 0; row < image.rows(); ++row) {
+                for (int col = 0; col < image.cols(); ++col) {
+                    frame.pixels[static_cast<std::size_t>(row) * frame.width + col] = image(row, col);
+                }
+            }
+        } else {
+            for (std::uint32_t y = 0; y < outHeight; ++y) {
+                const int srcY = static_cast<int>(
+                    static_cast<std::size_t>(y) * image.rows() / outHeight);
+                for (std::uint32_t x = 0; x < outWidth; ++x) {
+                    const int srcX = static_cast<int>(
+                        static_cast<std::size_t>(x) * image.cols() / outWidth);
+                    frame.pixels[static_cast<std::size_t>(y) * outWidth + x] = image(srcY, srcX);
+                }
             }
         }
-    } else {
-        for (std::uint32_t y = 0; y < outHeight; ++y) {
-            const int srcY = static_cast<int>(
-                static_cast<std::size_t>(y) * image.rows() / outHeight);
-            for (std::uint32_t x = 0; x < outWidth; ++x) {
-                const int srcX = static_cast<int>(
-                    static_cast<std::size_t>(x) * image.cols() / outWidth);
-                frame.pixels[static_cast<std::size_t>(y) * outWidth + x] = image(srcY, srcX);
+    };
+
+    rto::RtoFrame frame{};
+    buildFrame(frame);
+
+    auto sendFrames = [&](auto& publisher) {
+        for (std::size_t frameIndex = 0; frameIndex < frames; ++frameIndex) {
+            frame.timestampNs = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::system_clock::now().time_since_epoch())
+                    .count());
+
+            if (!publisher.publish(frame)) {
+                return false;
+            }
+
+            if (frameIndex + 1 < frames && intervalMs > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
             }
         }
+        return true;
+    };
+
+    if (sharedFile) {
+        rto::SharedFramePublisher publisher(*sharedFile);
+        return sendFrames(publisher);
     }
 
-    for (std::size_t frameIndex = 0; frameIndex < frames; ++frameIndex) {
-        frame.timestampNs = static_cast<std::uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::system_clock::now().time_since_epoch())
-                .count());
-
-        if (!bus.publish(frame)) {
-            return false;
-        }
-
-        if (frameIndex + 1 < frames && intervalMs > 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
-        }
-    }
-
-    return true;
+    rto::RtoDataBus bus(endpoint);
+    return sendFrames(bus);
 }
 
 }  // namespace app

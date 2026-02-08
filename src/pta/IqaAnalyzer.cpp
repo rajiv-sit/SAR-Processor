@@ -54,4 +54,26 @@ IqaPeakResult IqaAnalyzer::process1DPeaks(const std::vector<float>& data,
     return result;
 }
 
+IqaPeak2DResult IqaAnalyzer::process2DPeaks(const Eigen::MatrixXf& chip,
+                                            const IqaPeakOptions& options) const {
+    IqaPeak2DResult result{};
+    if (chip.rows() == 0 || chip.cols() == 0) {
+        return result;
+    }
+
+    std::vector<float> xProfile(static_cast<std::size_t>(chip.cols()), 0.0f);
+    std::vector<float> yProfile(static_cast<std::size_t>(chip.rows()), 0.0f);
+    for (int row = 0; row < chip.rows(); ++row) {
+        for (int col = 0; col < chip.cols(); ++col) {
+            const float value = chip(row, col);
+            xProfile[static_cast<std::size_t>(col)] += value;
+            yProfile[static_cast<std::size_t>(row)] += value;
+        }
+    }
+
+    result.x = process1DPeaks(xProfile, options);
+    result.y = process1DPeaks(yProfile, options);
+    return result;
+}
+
 }  // namespace pta

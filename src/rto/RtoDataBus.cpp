@@ -131,13 +131,16 @@ bool RtoDataBus::publish(const RtoFrame& frame) {
         return false;
     }
 
-    std::vector<std::uint8_t> payload(payloadSize);
-    writeU32Le(payload.data(), frame.width);
-    writeU32Le(payload.data() + 4, frame.height);
-    writeU64Le(payload.data() + 8, frame.timestampNs);
+    if (payloadBuffer_.capacity() < payloadSize) {
+        payloadBuffer_.reserve(payloadSize);
+    }
+    payloadBuffer_.resize(payloadSize);
+    writeU32Le(payloadBuffer_.data(), frame.width);
+    writeU32Le(payloadBuffer_.data() + 4, frame.height);
+    writeU64Le(payloadBuffer_.data() + 8, frame.timestampNs);
 
     if (!frame.pixels.empty()) {
-        std::uint8_t* pixelPtr = payload.data() + kHeaderSize;
+        std::uint8_t* pixelPtr = payloadBuffer_.data() + kHeaderSize;
         if (std::endian::native == std::endian::little) {
             std::memcpy(pixelPtr,
                         frame.pixels.data(),
@@ -152,8 +155,8 @@ bool RtoDataBus::publish(const RtoFrame& frame) {
     }
 
     const auto sent = sendto(sock,
-                             reinterpret_cast<const char*>(payload.data()),
-                             static_cast<int>(payload.size()),
+                             reinterpret_cast<const char*>(payloadBuffer_.data()),
+                             static_cast<int>(payloadBuffer_.size()),
                              0,
                              reinterpret_cast<sockaddr*>(&addr),
                              sizeof(addr));
@@ -165,7 +168,7 @@ bool RtoDataBus::publish(const RtoFrame& frame) {
     close(sock);
 #endif
 
-    return sent == static_cast<int>(payload.size());
+    return sent == static_cast<int>(payloadBuffer_.size());
 }
 
 }  // namespace rto

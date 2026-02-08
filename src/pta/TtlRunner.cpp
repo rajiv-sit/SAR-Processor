@@ -37,6 +37,7 @@ struct TtlConfig {
     std::string sideLobeMethod;
     bool analyze2D = false;
     bool useIqa = false;
+    bool useIqa2D = false;
 };
 
 std::string trim(const std::string& value) {
@@ -167,6 +168,7 @@ TtlConfig loadConfig(std::ifstream& input, const std::string& path) {
             config.powerDetection = json.value("powerDetection", "");
             config.sideLobeMethod = json.value("sideLobeMethod", "");
             config.analyze2D = json.value("analyze2D", config.analyze2D);
+            config.useIqa2D = json.value("useIqa2D", config.useIqa2D);
             if (json.contains("chipData") && json["chipData"].is_array()) {
                 if (!json["chipData"].empty() && json["chipData"].front().is_array()) {
                     config.chipRows = static_cast<int>(json["chipData"].size());
@@ -223,6 +225,7 @@ TtlConfig loadConfig(std::ifstream& input, const std::string& path) {
         config.sideLobeMethod = kv.count("sidelobemethod") ? kv.at("sidelobemethod") : "";
         config.analyze2D = parseBool(kv.count("analyze2d") ? kv.at("analyze2d") : "", config.analyze2D);
         config.useIqa = parseBool(kv.count("useiqa") ? kv.at("useiqa") : "", config.useIqa);
+        config.useIqa2D = parseBool(kv.count("useiqa2d") ? kv.at("useiqa2d") : "", config.useIqa2D);
     }
 
     return config;
@@ -303,6 +306,7 @@ bool TtlRunner::runFromConfig(const std::string& path) {
     PtaHistogram hist{};
     IqaAnalyzer iqaAnalyzer;
     IqaPeakResult iqaResult{};
+    IqaPeak2DResult iqa2dResult{};
     std::string status = "no_input";
 
     if (!chipData.empty()) {
@@ -330,6 +334,9 @@ bool TtlRunner::runFromConfig(const std::string& path) {
             iqaOptions.sideLobeMethod = config.sideLobeMethod;
             const auto profile = flattenChip(chip.chipIn);
             iqaResult = iqaAnalyzer.process1DPeaks(profile, iqaOptions);
+            if (config.useIqa2D) {
+                iqa2dResult = iqaAnalyzer.process2DPeaks(chip.chipIn, iqaOptions);
+            }
         }
         status = "ok";
     }
@@ -382,6 +389,28 @@ bool TtlRunner::runFromConfig(const std::string& path) {
                 payload["iqa"]["peaks"].push_back({{"index", peak.index}, {"power", peak.power}});
             }
         }
+        if (config.useIqa2D) {
+            payload["iqa2d"] = {
+                {"x", {{"stats", {{"irw", iqa2dResult.x.stats.irw},
+                                  {"mslr", iqa2dResult.x.stats.mslr},
+                                  {"islr", iqa2dResult.x.stats.islr},
+                                  {"pos", iqa2dResult.x.stats.pos},
+                                  {"maxPower", iqa2dResult.x.stats.maxPower}}},
+                       {"peaks", nlohmann::json::array()}}},
+                {"y", {{"stats", {{"irw", iqa2dResult.y.stats.irw},
+                                  {"mslr", iqa2dResult.y.stats.mslr},
+                                  {"islr", iqa2dResult.y.stats.islr},
+                                  {"pos", iqa2dResult.y.stats.pos},
+                                  {"maxPower", iqa2dResult.y.stats.maxPower}}},
+                       {"peaks", nlohmann::json::array()}}}
+            };
+            for (const auto& peak : iqa2dResult.x.peaks) {
+                payload["iqa2d"]["x"]["peaks"].push_back({{"index", peak.index}, {"power", peak.power}});
+            }
+            for (const auto& peak : iqa2dResult.y.peaks) {
+                payload["iqa2d"]["y"]["peaks"].push_back({{"index", peak.index}, {"power", peak.power}});
+            }
+        }
         payload["histogram"] = {
             {"min", hist.minValue},
             {"max", hist.maxValue},
@@ -411,6 +440,20 @@ bool TtlRunner::runFromConfig(const std::string& path) {
             report << "iqa.pos=" << iqaResult.stats.pos << '\n';
             report << "iqa.maxPower=" << iqaResult.stats.maxPower << '\n';
             report << "iqa.peakCount=" << iqaResult.peaks.size() << '\n';
+        }
+        if (config.useIqa2D) {
+            report << "iqa2d.x.irw=" << iqa2dResult.x.stats.irw << '\n';
+            report << "iqa2d.x.mslr=" << iqa2dResult.x.stats.mslr << '\n';
+            report << "iqa2d.x.islr=" << iqa2dResult.x.stats.islr << '\n';
+            report << "iqa2d.x.pos=" << iqa2dResult.x.stats.pos << '\n';
+            report << "iqa2d.x.maxPower=" << iqa2dResult.x.stats.maxPower << '\n';
+            report << "iqa2d.x.peakCount=" << iqa2dResult.x.peaks.size() << '\n';
+            report << "iqa2d.y.irw=" << iqa2dResult.y.stats.irw << '\n';
+            report << "iqa2d.y.mslr=" << iqa2dResult.y.stats.mslr << '\n';
+            report << "iqa2d.y.islr=" << iqa2dResult.y.stats.islr << '\n';
+            report << "iqa2d.y.pos=" << iqa2dResult.y.stats.pos << '\n';
+            report << "iqa2d.y.maxPower=" << iqa2dResult.y.stats.maxPower << '\n';
+            report << "iqa2d.y.peakCount=" << iqa2dResult.y.peaks.size() << '\n';
         }
     }
     return true;

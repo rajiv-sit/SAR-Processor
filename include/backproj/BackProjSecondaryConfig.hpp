@@ -33,6 +33,12 @@ struct FrameRegistrationParams {
     double detPow = 0.0;
 };
 
+struct ImageScalingParams {
+    double lowerPercentile = 0.0;
+    double upperPercentile = 1.0;
+    double outputScalingFactor = 1.0;
+};
+
 struct BackProjSecondaryConfig {
     std::string algorithmSelection;
     FilterParams rngFilterParams;
@@ -40,6 +46,7 @@ struct BackProjSecondaryConfig {
     QuadTreeParams quadParams;
     FrameRegistrationParams frameRegistrationParams;
     AutofocusParams autofocusParams;
+    ImageScalingParams imageScaling;
     std::string rgCompMode;
     std::uint32_t blockSizeInBytes = 0;
     std::uint32_t nExtraRngSamps = 0;

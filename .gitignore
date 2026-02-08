@@ -1,9 +1,11 @@
 # Build artifacts
+build/
 **/build/
 **/build-*/
 **/cmake-build-*/
 
 # Conan
+.conan_cache
 **/conan.lock
 **/conanbuildinfo.txt
 **/conanbuildinfo.cmake
@@ -12,6 +14,7 @@
 **/conan*build*.cmake
 **/conan_profiles/*
 .conan_cache/
+conan/
 data/
 
 # IDE / tooling
@@ -33,6 +36,8 @@ MATLAB-to-Cplusplus.md
 #folder
 md/
 tools/
+scripts/
+run_all_rpf.ps1
 
 # Coverage
 coverage/

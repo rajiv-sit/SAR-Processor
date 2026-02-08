@@ -36,6 +36,7 @@ struct BackProjOperatorConfig {
     std::uint32_t numTilesY = 1;
     std::uint32_t numTilesX = 1;
     bool useGpu = false;
+    bool fastMode = false;
 };
 
 }  // namespace backproj

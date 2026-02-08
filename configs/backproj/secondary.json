@@ -8,7 +8,8 @@
   "azmFilterParams": {
     "windowCoef": 0.54,
     "windowBroadening": 1.47,
-    "scalingMethod": "totalpower"
+    "rngZoom": 4,
+    "rngInterpKind": 2
   },
   "quadParams": {
     "minSubImageSize": 32,
@@ -27,6 +28,18 @@
     "magFactor": 16,
     "accumPow": 0.25,
     "detPow": 0.5
+  },
+  "autofocusParams": {
+    "selectionMethod": "pga",
+    "minMetricDelta": 0.0,
+    "maxPoints": 100,
+    "maxFrames": 0
+  },
+  "imageScaling": {
+    "frequency": 1,
+    "lowerPercentile": 0.02,
+    "upperPercentile": 0.999,
+    "outputScalingFactor": 1.0
   },
   "rgCompMode": "narrowSwath",
   "blockSizeInBytes": 41943040,

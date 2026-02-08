@@ -150,3 +150,19 @@ TEST(PtaAnalyzerTests, IqaAnalyzerHandlesPowerDetection) {
     EXPECT_GT(result.stats.maxPower, 0.0);
     EXPECT_FALSE(result.peaks.empty());
 }
+
+TEST(PtaAnalyzerTests, IqaAnalyzerProcesses2DPeaks) {
+    // Use >=3 samples per profile so 1D peak detection has an interior sample.
+    Eigen::MatrixXf chip(3, 3);
+    chip << 0.0f, 1.0f, 0.0f,
+            0.0f, 3.0f, 0.0f,
+            0.0f, 1.0f, 0.0f;
+
+    pta::IqaAnalyzer analyzer;
+    pta::IqaPeakOptions options{};
+    const auto result = analyzer.process2DPeaks(chip, options);
+    EXPECT_GT(result.x.stats.maxPower, 0.0);
+    EXPECT_GT(result.y.stats.maxPower, 0.0);
+    EXPECT_FALSE(result.x.peaks.empty());
+    EXPECT_FALSE(result.y.peaks.empty());
+}

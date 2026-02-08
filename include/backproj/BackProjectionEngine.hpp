@@ -1,8 +1,11 @@
 #pragma once
 
+#include <complex>
 #include <string>
+#include <vector>
 
 #include <Eigen/Dense>
+#include <unsupported/Eigen/FFT>
 
 #include "backproj/AutofocusController.hpp"
 #include "backproj/BackProjOperatorConfig.hpp"
@@ -30,6 +33,14 @@ private:
     rpf::LatLongGrid lastLatLongGrid_{};
     bool hasLatLongGrid_ = false;
     std::string lastSourcePath_{};
+    Eigen::FFT<float> rowFft_;
+    Eigen::FFT<float> colFft_;
+    std::vector<std::complex<float>> fftRowInput_;
+    std::vector<std::complex<float>> fftRowOutput_;
+    std::vector<std::complex<float>> fftColInput_;
+    std::vector<std::complex<float>> fftColOutput_;
+    void fftRows(Eigen::MatrixXcf& data);
+    void fftCols(Eigen::MatrixXcf& data);
 };
 
 }  // namespace backproj

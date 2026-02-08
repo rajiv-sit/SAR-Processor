@@ -6,6 +6,21 @@
 
 namespace backproj {
 
+namespace {
+
+nlohmann::json getObjectOrEmpty(const nlohmann::json& root, const char* key) {
+    if (!root.is_object()) {
+        return nlohmann::json::object();
+    }
+    auto it = root.find(key);
+    if (it == root.end() || it->is_null() || !it->is_object()) {
+        return nlohmann::json::object();
+    }
+    return *it;
+}
+
+}  // namespace
+
 BackProjOperatorConfig BackProjConfigLoader::loadOperatorConfig(const std::string& path) const {
     std::ifstream input(path);
     BackProjOperatorConfig config{};
@@ -15,6 +30,9 @@ BackProjOperatorConfig BackProjConfigLoader::loadOperatorConfig(const std::strin
 
     nlohmann::json json;
     input >> json;
+    if (!json.is_object()) {
+        return config;
+    }
 
     config.outputDebugRpf = json.value("outputDebugRpf", false);
     config.rpfBaseFileName = json.value("rpfBaseFileName", "");
@@ -45,6 +63,7 @@ BackProjOperatorConfig BackProjConfigLoader::loadOperatorConfig(const std::strin
     config.numTilesY = json.value("numTilesY", 1u);
     config.numTilesX = json.value("numTilesX", 1u);
     config.useGpu = json.value("useGpu", false);
+    config.fastMode = json.value("fastMode", false);
 
     return config;
 }
@@ -58,52 +77,49 @@ BackProjSecondaryConfig BackProjConfigLoader::loadSecondaryConfig(const std::str
 
     nlohmann::json json;
     input >> json;
+    if (!json.is_object()) {
+        return config;
+    }
 
     config.algorithmSelection = json.value("algorithmSelection", "");
-    config.rngFilterParams.windowCoef = json.value("rngFilterParams", nlohmann::json{}).value("windowCoef", 0.0);
-    config.rngFilterParams.windowBroadening =
-        json.value("rngFilterParams", nlohmann::json{}).value("windowBroadening", 0.0);
-    config.rngFilterParams.scalingMethod =
-        json.value("rngFilterParams", nlohmann::json{}).value("scalingMethod", "");
-    config.azmFilterParams.windowCoef = json.value("azmFilterParams", nlohmann::json{}).value("windowCoef", 0.0);
-    config.azmFilterParams.windowBroadening =
-        json.value("azmFilterParams", nlohmann::json{}).value("windowBroadening", 0.0);
-    config.azmFilterParams.scalingMethod =
-        json.value("azmFilterParams", nlohmann::json{}).value("scalingMethod", "");
+    const auto rngFilter = getObjectOrEmpty(json, "rngFilterParams");
+    config.rngFilterParams.windowCoef = rngFilter.value("windowCoef", 0.0);
+    config.rngFilterParams.windowBroadening = rngFilter.value("windowBroadening", 0.0);
+    config.rngFilterParams.scalingMethod = rngFilter.value("scalingMethod", "");
 
-    config.quadParams.minSubImageSize = json.value("quadParams", nlohmann::json{}).value("minSubImageSize", 32u);
-    config.quadParams.azOverSampFact = json.value("quadParams", nlohmann::json{}).value("azOverSampFact", 1.0);
-    config.quadParams.nExtraRngSamps = json.value("quadParams", nlohmann::json{}).value("nExtraRngSamps", 0u);
-    config.quadParams.nRngTaper = json.value("quadParams", nlohmann::json{}).value("nRngTaper", 0u);
-    config.quadParams.nAzmTaper = json.value("quadParams", nlohmann::json{}).value("nAzmTaper", 0u);
-    config.quadParams.nPadAzFftEachEnd =
-        json.value("quadParams", nlohmann::json{}).value("nPadAzFftEachEnd", 0u);
+    const auto azmFilter = getObjectOrEmpty(json, "azmFilterParams");
+    config.azmFilterParams.windowCoef = azmFilter.value("windowCoef", 0.0);
+    config.azmFilterParams.windowBroadening = azmFilter.value("windowBroadening", 0.0);
+    config.azmFilterParams.scalingMethod = azmFilter.value("scalingMethod", "");
 
-    config.frameRegistrationParams.alphaAccum =
-        json.value("frameRegistrationParams", nlohmann::json{}).value("alphaAccum", 0.0);
-    config.frameRegistrationParams.preShiftImageGrid =
-        json.value("frameRegistrationParams", nlohmann::json{}).value("preShiftImageGrid", false);
-    config.frameRegistrationParams.regisSearchSize =
-        json.value("frameRegistrationParams", nlohmann::json{}).value("regisSearchSize", 0u);
-    config.frameRegistrationParams.marginBlanking =
-        json.value("frameRegistrationParams", nlohmann::json{}).value("marginBlanking", 0u);
-    config.frameRegistrationParams.chipSize =
-        json.value("frameRegistrationParams", nlohmann::json{}).value("chipSize", 0u);
-    config.frameRegistrationParams.magFactor =
-        json.value("frameRegistrationParams", nlohmann::json{}).value("magFactor", 0u);
-    config.frameRegistrationParams.accumPow =
-        json.value("frameRegistrationParams", nlohmann::json{}).value("accumPow", 0.0);
-    config.frameRegistrationParams.detPow =
-        json.value("frameRegistrationParams", nlohmann::json{}).value("detPow", 0.0);
+    const auto quadParams = getObjectOrEmpty(json, "quadParams");
+    config.quadParams.minSubImageSize = quadParams.value("minSubImageSize", 32u);
+    config.quadParams.azOverSampFact = quadParams.value("azOverSampFact", 1.0);
+    config.quadParams.nExtraRngSamps = quadParams.value("nExtraRngSamps", 0u);
+    config.quadParams.nRngTaper = quadParams.value("nRngTaper", 0u);
+    config.quadParams.nAzmTaper = quadParams.value("nAzmTaper", 0u);
+    config.quadParams.nPadAzFftEachEnd = quadParams.value("nPadAzFftEachEnd", 0u);
 
-    config.autofocusParams.selectionMethod =
-        json.value("autofocusParams", nlohmann::json{}).value("selectionMethod", "");
-    config.autofocusParams.minMetricDelta =
-        json.value("autofocusParams", nlohmann::json{}).value("minMetricDelta", 0.0);
-    config.autofocusParams.maxPoints =
-        json.value("autofocusParams", nlohmann::json{}).value("maxPoints", 16u);
-    config.autofocusParams.maxFrames =
-        json.value("autofocusParams", nlohmann::json{}).value("maxFrames", 0u);
+    const auto frameReg = getObjectOrEmpty(json, "frameRegistrationParams");
+    config.frameRegistrationParams.alphaAccum = frameReg.value("alphaAccum", 0.0);
+    config.frameRegistrationParams.preShiftImageGrid = frameReg.value("preShiftImageGrid", false);
+    config.frameRegistrationParams.regisSearchSize = frameReg.value("regisSearchSize", 0u);
+    config.frameRegistrationParams.marginBlanking = frameReg.value("marginBlanking", 0u);
+    config.frameRegistrationParams.chipSize = frameReg.value("chipSize", 0u);
+    config.frameRegistrationParams.magFactor = frameReg.value("magFactor", 0u);
+    config.frameRegistrationParams.accumPow = frameReg.value("accumPow", 0.0);
+    config.frameRegistrationParams.detPow = frameReg.value("detPow", 0.0);
+
+    const auto autofocus = getObjectOrEmpty(json, "autofocusParams");
+    config.autofocusParams.selectionMethod = autofocus.value("selectionMethod", "");
+    config.autofocusParams.minMetricDelta = autofocus.value("minMetricDelta", 0.0);
+    config.autofocusParams.maxPoints = autofocus.value("maxPoints", 16u);
+    config.autofocusParams.maxFrames = autofocus.value("maxFrames", 0u);
+
+    const auto imageScaling = getObjectOrEmpty(json, "imageScaling");
+    config.imageScaling.lowerPercentile = imageScaling.value("lowerPercentile", 0.0);
+    config.imageScaling.upperPercentile = imageScaling.value("upperPercentile", 1.0);
+    config.imageScaling.outputScalingFactor = imageScaling.value("outputScalingFactor", 1.0);
 
     config.rgCompMode = json.value("rgCompMode", "");
     config.blockSizeInBytes = json.value("blockSizeInBytes", 0u);
