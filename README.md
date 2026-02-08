@@ -88,10 +88,7 @@ Controls:
 
 ## Visualizer Figure
 Add a screenshot of the ImGui visualizer here.
-
-```md
-![ImGui Visualizer](docs/images/visualizer.png)
-```
+<img width="1599" height="973" alt="image" src="https://github.com/user-attachments/assets/3e5ce281-9047-4307-87af-104e3a57402f" />
 
 ## Tests
 ```powershell
