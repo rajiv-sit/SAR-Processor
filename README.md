@@ -40,7 +40,7 @@ The AFRL GOTCHA dashboard shows range compression, backprojection / azimuth comp
 
 ![AFRL GOTCHA ImGui dashboard showing range compression, backprojection, geocoordinate status, and the final image](image/afrl-gotcha.png)
 
-This screenshot is stored locally at `image/afrl-gotcha.png`. The `image/` folder is ignored by Git, so the preview requires the local file and is not included in a fresh checkout.
+*Figure 1. AFRL GOTCHA processing in the ImGui dashboard: range profiles (top left), backprojection / azimuth compression (top right), geocoordinate status (bottom left), and final image (bottom right). The displayed reconstruction is 1024 × 1024 pixels.*
 
 The Direct RPF ImGui viewer also reads `.sarframe` scientific products. Export the existing geocoded GeoTIFFs without reprocessing the source measurements, then open their sequence. These commands assume the graphics-enabled executable is built under `build/Debug`:
 

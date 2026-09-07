@@ -19,8 +19,9 @@ conan/*
 !conan/profiles/*
 data/
 
-# Local visualizer screenshots
-/image/
+# Local visualizer screenshots, except the README figure
+/image/*
+!/image/afrl-gotcha.png
 
 # IDE / tooling
 .vscode/
