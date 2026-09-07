@@ -23,6 +23,7 @@ TEST(BackProjConfigLoaderTests, MissingFilesReturnDefaults) {
     const auto secConfig = loader.loadSecondaryConfig("missing_secondary.json");
 
     EXPECT_EQ(opConfig.inputNumFiles, 0u);
+    EXPECT_FALSE(opConfig.allowSyntheticInput);
     EXPECT_EQ(secConfig.blockSizeInBytes, 0u);
 }
 
@@ -31,7 +32,7 @@ TEST(BackProjConfigLoaderTests, LoadsOperatorConfigFields) {
     std::ofstream output(path);
     ASSERT_TRUE(output);
     output << R"json({
-        "outputDebugRpf": true,
+        "outputDebugRpf": true, "allowSyntheticInput": true,
         "rpfBaseFileName": "rpf_base",
         "inputFilePath": "data/raw",
         "inputFileName": "input.dat",
@@ -55,6 +56,7 @@ TEST(BackProjConfigLoaderTests, LoadsOperatorConfigFields) {
     backproj::BackProjConfigLoader loader;
     const auto config = loader.loadOperatorConfig(path.string());
     EXPECT_TRUE(config.outputDebugRpf);
+    EXPECT_TRUE(config.allowSyntheticInput);
     EXPECT_EQ(config.rpfBaseFileName, "rpf_base");
     EXPECT_EQ(config.inputFilePath, "data/raw");
     EXPECT_EQ(config.inputFileName, "input.dat");

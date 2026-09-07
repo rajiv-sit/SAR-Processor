@@ -74,6 +74,7 @@ bool writeTiffBuffer(const std::string& path,
 
     writeU32Le(output, 0);
 
+    output.close();
     return static_cast<bool>(output);
 }
 
@@ -200,6 +201,7 @@ bool writeRawFloat(const std::string& path, const Eigen::MatrixXf& image) {
         }
     }
 
+    output.close();
     return static_cast<bool>(output);
 }
 

@@ -60,7 +60,8 @@ bool SarTape2Generator::generate(const std::string& outputPath) {
 
     for (std::uint32_t pulse = 0; pulse < config_.numPulses; ++pulse) {
         PlatformState platform = platform_.stateAtPulse(pulse);
-        ComplexBuffer rx = synthesizer_.synthesizePulse(platform, scene_, waveform_, radar_);
+        ComplexBuffer rx = synthesizer_.synthesizePulse(platform, scene_, waveform_, radar_,
+                                                        config_.receiveSamples);
         noise_.apply(rx);
         rfChain_.applyGain(rx, 1.0f);
         QuantizedBuffer q = (config_.format == SampleFormat::kFloat32IQ)
@@ -90,7 +91,8 @@ bool SarTape2Generator::generateSarTapeRecords(const std::string& outputPath) {
 
     for (std::uint32_t pulse = 0; pulse < config_.numPulses; ++pulse) {
         PlatformState platform = platform_.stateAtPulse(pulse);
-        ComplexBuffer rx = synthesizer_.synthesizePulse(platform, scene_, waveform_, radar_);
+        ComplexBuffer rx = synthesizer_.synthesizePulse(platform, scene_, waveform_, radar_,
+                                                        config_.receiveSamples);
         noise_.apply(rx);
         rfChain_.applyGain(rx, 1.0f);
         QuantizedBuffer q = quantizer_.quantizeInt16(rx);

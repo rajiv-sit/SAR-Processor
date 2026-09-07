@@ -35,6 +35,7 @@ BackProjOperatorConfig BackProjConfigLoader::loadOperatorConfig(const std::strin
     }
 
     config.outputDebugRpf = json.value("outputDebugRpf", false);
+    config.allowSyntheticInput = json.value("allowSyntheticInput", false);
     config.rpfBaseFileName = json.value("rpfBaseFileName", "");
     config.inputFilePath = json.value("inputFilePath", "");
     config.inputFileName = json.value("inputFileName", "");

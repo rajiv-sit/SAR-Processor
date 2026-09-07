@@ -1,0 +1,2 @@
+# Compatibility entry point; pyproject.toml owns the shared processing dependencies.
+-e .

@@ -1,9 +1,14 @@
 #include "rto/RtoFrameBuffer.hpp"
 
+#include <stdexcept>
+
 namespace rto {
 
-RtoFrameBuffer::RtoFrameBuffer(std::size_t capacity)
-    : capacity_(capacity) {}
+RtoFrameBuffer::RtoFrameBuffer(std::size_t capacity) : capacity_(capacity) {
+    if (capacity == 0) {
+        throw std::invalid_argument("RtoFrameBuffer capacity must be positive");
+    }
+}
 
 void RtoFrameBuffer::push(RtoFrame frame) {
     std::lock_guard<std::mutex> lock(mutex_);

@@ -19,6 +19,9 @@ conan/*
 !conan/profiles/*
 data/
 
+# Local visualizer screenshots
+/image/
+
 # IDE / tooling
 .vscode/
 .idea/
@@ -29,6 +32,7 @@ data/
 *.vcxproj*
 *.sln
 CMakeUserPresets.json
+imgui.ini
 
 # OS
 .DS_Store
@@ -47,3 +51,14 @@ run_all_rpf.ps1
 coverage/
 coverage.xml
 LastCoverageResults.log
+
+# Measured-data processing artifacts and Python caches
+output/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+.venv/
+*.egg-info/

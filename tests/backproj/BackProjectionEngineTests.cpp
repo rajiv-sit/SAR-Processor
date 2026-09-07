@@ -1,10 +1,12 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include "backproj/BackProjectionEngine.hpp"
 #include "sar/SarTapeToRpf.hpp"
@@ -22,6 +24,7 @@ std::filesystem::path makeTempPrefix(const std::string& stem) {
 
 TEST(BackProjectionEngineTests, WritesOutputWhenConfigured) {
     backproj::BackProjOperatorConfig op{};
+    op.allowSyntheticInput = true;
     op.nPixX = 4;
     op.nPixY = 3;
     const auto prefix = makeTempPrefix("backproj");
@@ -41,6 +44,10 @@ TEST(BackProjectionEngineTests, WritesOutputWhenConfigured) {
     EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_backproj.rpf"));
     EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_registration.json"));
     EXPECT_TRUE(std::filesystem::exists(prefix.string() + "_autofocus.json"));
+    nlohmann::json metadata;
+    std::ifstream(prefix.string() + "_backproj_meta.json") >> metadata;
+    EXPECT_EQ(metadata.at("processingAlgorithm"), "legacy_magnitude_2d_fft_demo");
+    EXPECT_EQ(metadata.at("syntheticInput"), true);
 }
 
 TEST(BackProjectionEngineTests, SkipsWorkWhenPixelDimsZero) {
@@ -50,6 +57,7 @@ TEST(BackProjectionEngineTests, SkipsWorkWhenPixelDimsZero) {
     std::filesystem::current_path(tempDir);
 
     backproj::BackProjOperatorConfig op{};
+    op.allowSyntheticInput = true;
     op.nPixX = 0;
     op.nPixY = 4;
     backproj::BackProjSecondaryConfig secondary{};
@@ -63,6 +71,7 @@ TEST(BackProjectionEngineTests, SkipsWorkWhenPixelDimsZero) {
 
 TEST(BackProjectionEngineTests, SkipsRegistrationAndAutofocusWhenDisabled) {
     backproj::BackProjOperatorConfig op{};
+    op.allowSyntheticInput = true;
     op.nPixX = 2;
     op.nPixY = 2;
     op.applyAutoFocus = false;
@@ -103,6 +112,7 @@ TEST(BackProjectionEngineTests, UsesRpfInputWhenProvided) {
     ASSERT_TRUE(sar::writeRpfFromSarTape(sarPath.string(), rpfPath.string(), 3, error)) << error;
 
     backproj::BackProjOperatorConfig op{};
+    op.allowSyntheticInput = true;
     op.inputFilePath = tempDir.string();
     op.inputFileName = rpfPath.filename().string();
     op.nPixX = 0;
@@ -121,6 +131,7 @@ TEST(BackProjectionEngineTests, UsesRpfInputWhenProvided) {
 
 TEST(BackProjectionEngineTests, GenerateImageReturnsConfiguredSize) {
     backproj::BackProjOperatorConfig op{};
+    op.allowSyntheticInput = true;
     op.nPixX = 5;
     op.nPixY = 4;
 
@@ -134,4 +145,61 @@ TEST(BackProjectionEngineTests, GenerateImageReturnsConfiguredSize) {
     EXPECT_EQ(image.rows(), 4);
     EXPECT_EQ(image.cols(), 5);
     EXPECT_GT(image.sum(), 0.0f);
+}
+
+TEST(BackProjectionEngineTests, RequiresExplicitDemoOptIn) {
+    backproj::BackProjOperatorConfig op{};
+    op.nPixX = 4;
+    op.nPixY = 4;
+    backproj::BackProjectionEngine engine(op, {});
+    EXPECT_EQ(engine.runWithOutputs().size(), 0);
+    EXPECT_FALSE(engine.lastError().empty());
+}
+
+TEST(BackProjectionEngineTests, NeverSubstitutesForMissingOrInvalidNamedInput) {
+    for (const bool demo : {false, true}) {
+        backproj::BackProjOperatorConfig op{};
+        op.allowSyntheticInput = demo;
+        op.nPixX = 4;
+        op.nPixY = 4;
+        const auto path = makeTempPrefix("backproj_invalid");
+        op.inputFileName = path.string();
+        backproj::BackProjectionEngine missing(op, {});
+        EXPECT_EQ(missing.generateImage().size(), 0);
+        std::ofstream(path) << "invalid rpf";
+        backproj::BackProjectionEngine invalid(op, {});
+        EXPECT_EQ(invalid.generateImage().size(), 0);
+    }
+}
+
+TEST(BackProjectionEngineTests, PropagatesEveryRequestedOutputFailure) {
+    for (const auto* suffix :
+         {"_backproj.tif", "_backproj_norm.tif", "_backproj.raw", "_backproj_meta.json",
+          "_backproj.rpf", "_registration.json", "_autofocus.json"}) {
+        SCOPED_TRACE(suffix);
+        backproj::BackProjOperatorConfig op{};
+        op.allowSyntheticInput = true;
+        op.nPixX = 4;
+        op.nPixY = 4;
+        op.outputDebugRpf = true;
+        op.rpfBaseFileName = makeTempPrefix("backproj_write_failure").string();
+        std::filesystem::create_directory(op.rpfBaseFileName + suffix);
+        backproj::BackProjectionEngine engine(op, {});
+        EXPECT_EQ(engine.runWithOutputs().size(), 0);
+        EXPECT_FALSE(engine.lastError().empty());
+    }
+}
+
+TEST(BackProjectionEngineTests, FastModeWritesRequiredOutputsOnly) {
+    backproj::BackProjOperatorConfig op{};
+    op.allowSyntheticInput = true;
+    op.nPixX = 4;
+    op.nPixY = 4;
+    op.fastMode = true;
+    op.rpfBaseFileName = makeTempPrefix("backproj_fast").string();
+    backproj::BackProjectionEngine engine(op, {});
+    EXPECT_EQ(engine.runWithOutputs().size(), 16);
+    EXPECT_TRUE(engine.lastError().empty());
+    EXPECT_TRUE(std::filesystem::exists(op.rpfBaseFileName + "_backproj.raw"));
+    EXPECT_FALSE(std::filesystem::exists(op.rpfBaseFileName + "_backproj_norm.tif"));
 }

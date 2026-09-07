@@ -8,6 +8,8 @@ namespace backproj {
 
 struct BackProjOperatorConfig {
     bool outputDebugRpf = false;
+    // Explicit demonstration mode; never substitutes for an invalid named input.
+    bool allowSyntheticInput = false;
     std::string rpfBaseFileName;
     std::string inputFilePath;
     std::string inputFileName;

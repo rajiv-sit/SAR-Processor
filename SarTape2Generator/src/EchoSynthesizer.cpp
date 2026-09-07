@@ -1,7 +1,9 @@
 #include "sartape2/EchoSynthesizer.hpp"
 
 #include <cmath>
+#include <algorithm>
 #include <numbers>
+#include <stdexcept>
 
 #include "sartape2/RadarModel.hpp"
 #include "sartape2/WaveformModel.hpp"
@@ -52,21 +54,38 @@ EchoSynthesizer::EchoSynthesizer() = default;
 ComplexBuffer EchoSynthesizer::synthesizePulse(const PlatformState& platform,
                                                const SceneModel& scene,
                                                const WaveformModel& waveform,
-                                               const RadarModel& radar) const {
+                                               const RadarModel& radar,
+                                               std::size_t receiveSamples) const {
     const ComplexBuffer chirp = waveform.referenceChirp();
-    ComplexBuffer rx(chirp.size(), ComplexSample(0.0f, 0.0f));
     if (chirp.empty()) {
-        return rx;
+        return {};
     }
 
     const auto targets = scene.targetsAt(platform.timeSec);
+    if (receiveSamples == 0) {
+        receiveSamples = chirp.size();
+        for (const auto& target : targets) {
+            const double delay = rangeDelay_.delaySamples(platform, target, radar);
+            const double extra = std::ceil(delay);
+            if (!std::isfinite(extra) || extra < 0.0 ||
+                extra >= static_cast<double>(ComplexBuffer().max_size() - chirp.size())) {
+                throw std::invalid_argument("Target delay exceeds the receive buffer limit");
+            }
+            receiveSamples =
+                std::max(receiveSamples, chirp.size() + static_cast<std::size_t>(extra));
+        }
+    }
+    ComplexBuffer rx(receiveSamples, ComplexSample(0.0f, 0.0f));
     for (const auto& target : targets) {
         const double delay = rangeDelay_.delaySamples(platform, target, radar);
-        const std::size_t baseDelay = static_cast<std::size_t>(std::floor(delay));
-        const double frac = delay - static_cast<double>(baseDelay);
-        if (baseDelay >= rx.size()) {
+        if (!std::isfinite(delay) || delay < 0.0) {
+            throw std::invalid_argument("Target delay must be finite and nonnegative");
+        }
+        if (delay >= static_cast<double>(rx.size())) {
             continue;
         }
+        const std::size_t baseDelay = static_cast<std::size_t>(std::floor(delay));
+        const double frac = delay - static_cast<double>(baseDelay);
         const float phase = phaseHistory_.phaseRadians(platform, target, radar);
         const ComplexSample phasor = std::polar(1.0f, phase);
         const float amplitude = static_cast<float>(target.rcs);

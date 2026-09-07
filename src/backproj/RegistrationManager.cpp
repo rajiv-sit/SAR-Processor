@@ -140,7 +140,8 @@ bool RegistrationManager::saveJson(const std::string& path) const {
         return false;
     }
     output << payload.dump(2) << '\n';
-    return true;
+    output.close();
+    return static_cast<bool>(output);
 }
 
 }  // namespace backproj

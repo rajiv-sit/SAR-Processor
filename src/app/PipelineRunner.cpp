@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <thread>
 
 #include <Eigen/Dense>
@@ -68,7 +69,13 @@ bool PipelineRunner::run() {
         readEnv("SAR_PIPELINE_OUTPUT_DIR").empty()
             ? std::filesystem::path("output")
             : std::filesystem::path(readEnv("SAR_PIPELINE_OUTPUT_DIR"));
-    std::filesystem::create_directories(outputDir);
+    std::error_code directoryError;
+    std::filesystem::create_directories(outputDir, directoryError);
+    if (directoryError) {
+        std::cerr << "Failed to create pipeline output directory: " << directoryError.message()
+                  << '\n';
+        return false;
+    }
 
     std::string outputPrefix = readEnv("SAR_PIPELINE_OUTPUT_PREFIX");
     if (outputPrefix.empty()) {
@@ -144,8 +151,11 @@ bool PipelineRunner::run() {
     }
 
     std::ofstream reportOut(outputDir / "pta_report.json");
-    if (reportOut) {
-        reportOut << report.dump(2) << "\n";
+    reportOut << report.dump(2) << "\n";
+    reportOut.close();
+    if (!reportOut) {
+        std::cerr << "Failed to write PTA report in " << outputDir << '\n';
+        return false;
     }
 
     return true;

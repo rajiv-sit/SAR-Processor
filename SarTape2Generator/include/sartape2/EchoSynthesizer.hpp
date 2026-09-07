@@ -28,12 +28,11 @@ class EchoSynthesizer {
 public:
     EchoSynthesizer();
 
-    ComplexBuffer synthesizePulse(const PlatformState& platform,
-                                  const SceneModel& scene,
-                                  const WaveformModel& waveform,
-                                  const RadarModel& radar) const;
+    ComplexBuffer synthesizePulse(const PlatformState& platform, const SceneModel& scene,
+                                  const WaveformModel& waveform, const RadarModel& radar,
+                                  std::size_t receiveSamples = 0) const;
 
-private:
+   private:
     RangeDelayEngine rangeDelay_{};
     PhaseHistoryEngine phaseHistory_{};
 };

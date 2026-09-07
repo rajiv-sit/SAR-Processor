@@ -434,6 +434,22 @@ TEST(RpfProductStreamLineTests, ReadsHalfSubnormalValue) {
     EXPECT_GT(line[0], 0.0f);
 }
 
+TEST(RpfProductStreamLineTests, PreservesHalfNan) {
+    const auto path = makeTempPath("half_nan");
+    writeBytes(path, {0x7E, 0x00});
+    rpf::RpfStreamBlock block{};
+    block.path = path.string();
+    block.startLine = 1;
+    block.numLines = 1;
+    block.numPixels = 1;
+    block.pixelType = 4;
+    const auto stream = rpf::RpfProductStreamLine::makeSynthetic({block}, {});
+    std::vector<float> line;
+    ASSERT_TRUE(stream.readLine(1, line));
+    ASSERT_EQ(line.size(), 1u);
+    EXPECT_TRUE(std::isnan(line[0]));
+}
+
 TEST(RpfProductStreamLineTests, InterpolatesPixelWhenOffGrid) {
     rpf::LatLongGrid grid{};
     grid.lineNumber = {1, 3};

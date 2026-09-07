@@ -78,6 +78,9 @@ float halfToFloat(std::uint16_t value) {
         return sign ? -val : val;
     }
     if (exp == 31) {
+        if (mantissa != 0) {
+            return std::numeric_limits<float>::quiet_NaN();
+        }
         return sign ? -INFINITY : INFINITY;
     }
     const float m = 1.0f + static_cast<float>(mantissa) / 1024.0f;

@@ -454,6 +454,7 @@ bool writeRpfFile(const std::string& path,
 
     if (!writeChunkHeader(output, RpfConstants::kEndOfFileChunkTag, 0)) return setError(error, "Failed to write end-of-file chunk.");
 
+    output.close();
     if (!output) return setError(error, "RPF writer failed while writing data.");
 
     return true;

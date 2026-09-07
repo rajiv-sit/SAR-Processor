@@ -253,11 +253,8 @@ bool loadRpfInput(const BackProjOperatorConfig& config,
         ++linesRead;
     }
 
-    if (linesRead == 0) {
+    if (linesRead != linesToRead || !image.allFinite()) {
         return false;
-    }
-    if (linesRead != image.rows()) {
-        image.conservativeResize(linesRead, block.numPixels);
     }
     grid = stream.latLongGrid();
     hasGrid = !grid.lineNumber.empty();
@@ -464,6 +461,7 @@ BackProjectionEngine::BackProjectionEngine(BackProjOperatorConfig operatorConfig
       secondaryConfig_(std::move(secondaryConfig)) {}
 
 Eigen::MatrixXf BackProjectionEngine::generateImage() {
+    lastError_.clear();
     Eigen::MatrixXf inputImage;
     std::string sourcePath;
     rpf::LatLongGrid grid{};
@@ -474,8 +472,14 @@ Eigen::MatrixXf BackProjectionEngine::generateImage() {
     lastLatLongGrid_ = grid;
     hasLatLongGrid_ = hasGrid;
 
+    if (!hasInput &&
+        (!operatorConfig_.inputFileName.empty() || !operatorConfig_.allowSyntheticInput)) {
+        return fail(
+            "A readable RPF input is required; synthetic demonstration input requires "
+            "allowSyntheticInput=true and no input filename.");
+    }
     if (!hasInput && (operatorConfig_.nPixX == 0 || operatorConfig_.nPixY == 0)) {
-        return {};
+        return fail("Synthetic demonstration image dimensions must be positive.");
     }
 
     ScopedProfiler phaseProfiler("phase_history");
@@ -585,11 +589,18 @@ Eigen::MatrixXf BackProjectionEngine::runWithOutputs() {
 
     const std::string basePath =
         operatorConfig_.rpfBaseFileName.empty() ? "backproj" : operatorConfig_.rpfBaseFileName;
-    writeTiff(basePath + "_backproj.tif", image);
-    if (!operatorConfig_.fastMode) {
-        (void)writeNormalizedTiff(basePath + "_backproj_norm.tif", image, secondaryConfig_.imageScaling);
+    if (!writeTiff(basePath + "_backproj.tif", image)) {
+        return fail("Failed to write TIFF: " + basePath);
     }
-    (void)writeRawFloat(basePath + "_backproj.raw", image);
+    if (!operatorConfig_.fastMode) {
+        if (!writeNormalizedTiff(basePath + "_backproj_norm.tif", image,
+                                 secondaryConfig_.imageScaling)) {
+            return fail("Failed to write normalized TIFF: " + basePath);
+        }
+    }
+    if (!writeRawFloat(basePath + "_backproj.raw", image)) {
+        return fail("Failed to write raw image: " + basePath);
+    }
     const float minValue = image.minCoeff();
     const float maxValue = image.maxCoeff();
     const float range = (maxValue > minValue) ? (maxValue - minValue) : 1.0f;
@@ -599,6 +610,8 @@ Eigen::MatrixXf BackProjectionEngine::runWithOutputs() {
         nlohmann::json payload;
         payload["width"] = image.cols();
         payload["height"] = image.rows();
+        payload["processingAlgorithm"] = "legacy_magnitude_2d_fft_demo";
+        payload["syntheticInput"] = lastSourcePath_.empty();
         payload["minValue"] = minValue;
         payload["maxValue"] = maxValue;
         payload["scale"] = scale;
@@ -620,8 +633,10 @@ Eigen::MatrixXf BackProjectionEngine::runWithOutputs() {
         };
 
         std::ofstream metaOut(basePath + "_backproj_meta.json");
-        if (metaOut) {
-            metaOut << payload.dump(2);
+        metaOut << payload.dump(2);
+        metaOut.close();
+        if (!metaOut) {
+            return fail("Failed to write metadata: " + basePath);
         }
     }
 
@@ -641,15 +656,21 @@ Eigen::MatrixXf BackProjectionEngine::runWithOutputs() {
                           options.geolocationGridNumLines);
         }
         std::string error;
-        (void)rpf::writeRpfFile(basePath + "_backproj.rpf", image, options, grid, error);
+        if (!rpf::writeRpfFile(basePath + "_backproj.rpf", image, options, grid, error)) {
+            return fail("Failed to write RPF: " + error);
+        }
     }
 
     if (!operatorConfig_.fastMode) {
         if (!registrationManager_.results().empty()) {
-            registrationManager_.saveJson(basePath + "_registration.json");
+            if (!registrationManager_.saveJson(basePath + "_registration.json")) {
+                return fail("Failed to write registration report: " + basePath);
+            }
         }
         if (!autofocusController_.results().empty()) {
-            autofocusController_.saveJson(basePath + "_autofocus.json");
+            if (!autofocusController_.saveJson(basePath + "_autofocus.json")) {
+                return fail("Failed to write autofocus report: " + basePath);
+            }
         }
     }
 
@@ -658,6 +679,12 @@ Eigen::MatrixXf BackProjectionEngine::runWithOutputs() {
 
 void BackProjectionEngine::run() {
     (void)runWithOutputs();
+}
+
+Eigen::MatrixXf BackProjectionEngine::fail(const std::string& error) {
+    lastError_ = error;
+    std::cerr << "[BackProjectionEngine] " << error << '\n';
+    return {};
 }
 
 }  // namespace backproj

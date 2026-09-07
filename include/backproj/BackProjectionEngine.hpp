@@ -24,8 +24,9 @@ public:
     void run() override;
     Eigen::MatrixXf generateImage() override;
     Eigen::MatrixXf runWithOutputs();
+    const std::string& lastError() const { return lastError_; }
 
-private:
+   private:
     BackProjOperatorConfig operatorConfig_;
     BackProjSecondaryConfig secondaryConfig_;
     RegistrationManager registrationManager_;
@@ -33,6 +34,8 @@ private:
     rpf::LatLongGrid lastLatLongGrid_{};
     bool hasLatLongGrid_ = false;
     std::string lastSourcePath_{};
+    std::string lastError_{};
+    Eigen::MatrixXf fail(const std::string& error);
     Eigen::FFT<float> rowFft_;
     Eigen::FFT<float> colFft_;
     std::vector<std::complex<float>> fftRowInput_;

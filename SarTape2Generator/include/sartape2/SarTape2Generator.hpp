@@ -12,7 +12,6 @@
 #include "sartape2/SarTape2Writer.hpp"
 #include "sartape2/SceneModel.hpp"
 #include "sartape2/WaveformModel.hpp"
-#include "sartape2/WaveformModel.hpp"
 
 namespace sartape2 {
 
@@ -24,6 +23,9 @@ struct GeneratorConfig {
     double prfJitterStdSec = 0.0;
     std::uint32_t prfJitterSeed = 0;
     std::uint32_t numPulses = 0;
+    // Zero captures the complete delayed echoes; positive values set a window
+    // starting at transmit time, in complex samples.
+    std::size_t receiveSamples = 0;
     float noiseStd = 0.0f;
     float snrDb = 0.0f;
     float signalRef = 1.0f;

@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <stdexcept>
 
 #include "rto/RtoDataBus.hpp"
 #include "rto/RtoFrameBuffer.hpp"
@@ -62,4 +63,7 @@ TEST(RtoDataBusTests, PublishWorksWithoutUdpPrefix) {
     frame.height = 1;
     frame.pixels = {1.0f};
     EXPECT_TRUE(bus.publish(frame));
+}
+TEST(RtoFrameBufferTests, RejectsZeroCapacity) {
+    EXPECT_THROW(rto::RtoFrameBuffer(0), std::invalid_argument);
 }

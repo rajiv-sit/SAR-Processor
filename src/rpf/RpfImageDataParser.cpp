@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <limits>
 
 namespace rpf {
 
@@ -45,6 +46,9 @@ float halfToFloat(std::uint16_t value) {
         return sign ? -val : val;
     }
     if (exp == 31) {
+        if (mantissa != 0) {
+            return std::numeric_limits<float>::quiet_NaN();
+        }
         return sign ? -INFINITY : INFINITY;
     }
     const float m = 1.0f + static_cast<float>(mantissa) / 1024.0f;
@@ -78,41 +82,29 @@ bool RpfImageDataParser::parseImageData(std::ifstream& input,
                                         const ImageDataChunkHeader& header,
                                         bool skipImageData,
                                         Eigen::MatrixXf& outImage) {
-    if (skipImageData) {
-        const std::uint32_t width = header.dataWidth;
-        const std::uint32_t height = header.dataHeight;
-        if (width == 0 || height == 0) {
-            return false;
-        }
-        std::size_t bytesPerPixel = 4;
-        switch (header.pixelType) {
-            case 0:
-            case 1:
-                bytesPerPixel = 1;
-                break;
-            case 4:
-                bytesPerPixel = 2;
-                break;
-            case 5:
-                bytesPerPixel = 8;
-                break;
-            case 6:
-                bytesPerPixel = 4;
-                break;
-            default:
-                bytesPerPixel = 4;
-                break;
-        }
-        const std::size_t bytesToSkip =
-            static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * bytesPerPixel;
-        input.seekg(static_cast<std::streamoff>(bytesToSkip), std::ios::cur);
-        return static_cast<bool>(input);
-    }
-
     const std::uint32_t width = header.dataWidth;
     const std::uint32_t height = header.dataHeight;
-    if (width == 0 || height == 0) {
+    if (width == 0 || height == 0 ||
+        width > static_cast<std::uint32_t>(std::numeric_limits<int>::max()) ||
+        height > static_cast<std::uint32_t>(std::numeric_limits<int>::max()) ||
+        header.pixelType < 0 || header.pixelType > 6) {
         return false;
+    }
+
+    constexpr std::array<std::uint64_t, 7> pixelBytes{1, 2, 4, 4, 2, 8, 4};
+    const std::uint64_t count = static_cast<std::uint64_t>(width) * height;
+    const auto bytesPerPixel = pixelBytes[static_cast<std::size_t>(header.pixelType)];
+    const auto start = input.tellg();
+    input.seekg(0, std::ios::end);
+    const auto end = input.tellg();
+    input.seekg(start);
+    if (start < 0 || end < start ||
+        count > static_cast<std::uint64_t>(end - start) / bytesPerPixel) {
+        return false;
+    }
+    if (skipImageData) {
+        input.seekg(static_cast<std::streamoff>(count * bytesPerPixel), std::ios::cur);
+        return static_cast<bool>(input);
     }
 
     outImage.resize(static_cast<int>(height), static_cast<int>(width));
@@ -121,9 +113,20 @@ bool RpfImageDataParser::parseImageData(std::ifstream& input,
         for (std::uint32_t col = 0; col < width; ++col) {
             float value = 0.0f;
             switch (header.pixelType) {
-                case 0:
-                case 1: {
+                case 0: {
                     value = readU8(input);
+                    break;
+                }
+                case 1: {
+                    std::uint16_t raw = 0;
+                    if (!readU16Be(input, raw)) return false;
+                    value = static_cast<float>(raw);
+                    break;
+                }
+                case 2: {
+                    std::uint32_t raw = 0;
+                    if (!readU32Be(input, raw)) return false;
+                    value = static_cast<float>(raw);
                     break;
                 }
                 case 4: {  // half float
@@ -133,13 +136,13 @@ bool RpfImageDataParser::parseImageData(std::ifstream& input,
                 case 5: {  // complex float
                     const float real = readFloatBe(input);
                     const float imag = readFloatBe(input);
-                    value = std::sqrt(real * real + imag * imag);
+                    value = std::hypot(real, imag);
                     break;
                 }
                 case 6: {  // complex half
                     const float real = readHalfBe(input);
                     const float imag = readHalfBe(input);
-                    value = std::sqrt(real * real + imag * imag);
+                    value = std::hypot(real, imag);
                     break;
                 }
                 default: {  // float32
